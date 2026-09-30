@@ -3,7 +3,8 @@ FROM python:3.12-slim
 # Node.js is required for both yt-dlp EJS challenge solving and bgutil PO Token generation
 COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:22-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 # ffmpeg for media muxing, curl for health checks, git for cloning the provider
 RUN apt-get update \
@@ -19,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /srv/pot-server \
     && cd /srv/pot-server/server \
     && npm ci \
-    && npx tsc
+    && ./node_modules/.bin/tsc
 
 # Create non-root application user and grant permissions
 RUN useradd --create-home --uid 10001 appuser \
