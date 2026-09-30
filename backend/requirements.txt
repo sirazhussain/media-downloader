@@ -5,4 +5,5 @@ pydantic>=2.7.0,<3.0.0
 pydantic-settings>=2.3.0,<3.0.0
 httpx>=0.27.0,<0.29.0
 python-multipart>=0.0.9,<0.0.20
+bgutil-ytdlp-pot-provider>=0.7.0
 pytest>=8.0.0

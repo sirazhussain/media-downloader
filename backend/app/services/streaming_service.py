@@ -50,7 +50,6 @@ class StreamingService:
     def __init__(self, settings: Settings) -> None:
         self._max_bytes = settings.max_download_bytes
         self._timeout = settings.request_timeout_seconds
-        self._proxy_url = settings.proxy_url.strip() if settings.proxy_url and settings.proxy_url.strip() else None
 
     async def stream_remote(self, url: str) -> AsyncIterator[bytes]:
         """Yield media bytes from a direct URL, aborting past the size cap."""
@@ -61,8 +60,6 @@ class StreamingService:
             "follow_redirects": True,
             "max_redirects": 5,
         }
-        if self._proxy_url:
-            client_kwargs["proxy"] = self._proxy_url
 
         try:
             async with httpx.AsyncClient(**client_kwargs) as client:

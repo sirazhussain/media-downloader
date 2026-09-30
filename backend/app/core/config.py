@@ -24,14 +24,13 @@ class Settings(BaseSettings):
     cors_origins: str | list[str] = ["http://localhost:3000"]
 
     max_url_length: int = 2048
-    max_download_bytes: int = 2_147_483_648  # 2 GiB
+    max_download_bytes: int = 10_737_418_240  # 10 GiB (supports 4GB and 8GB videos)
     max_duration_seconds: int = 14400  # 4 hours
-    rate_limit_info_per_min: int = 20
-    rate_limit_download_per_min: int = 5
-    request_timeout_seconds: int = 600  # 10 min for large file streaming
+    rate_limit_info_per_min: int = 60
+    rate_limit_download_per_min: int = 30
+    request_timeout_seconds: int = 1800  # 30 min for large file streaming
     yt_dlp_socket_timeout: int = 30
     youtube_cookies: str | None = None
-    proxy_url: str | None = None
 
     @field_validator("cors_origins", mode="after")
     @classmethod
