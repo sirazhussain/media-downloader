@@ -67,11 +67,7 @@ class MediaExtractor:
             "noplaylist": True,
             "socket_timeout": self._socket_timeout,
             "retries": 2,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "mweb"]
-                }
-            },
+            "js_runtimes": {"node": {}},
             # Deliberately absent: cookiefile, cookiesfrombrowser, username,
             # password, or any session/authentication material.
         }
