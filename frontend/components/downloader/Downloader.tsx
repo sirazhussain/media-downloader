@@ -33,11 +33,11 @@ interface DownloaderProps {
   autoAnalyze?: boolean;
 }
 
-/** Prefer a combined video+audio format as the default selection. */
+/** Default to highest quality video, falling back to first format. */
 function pickDefaultFormat(media: MediaInfo): string | null {
   if (media.formats.length === 0) return null;
-  const combined = media.formats.find((f) => f.has_video && f.has_audio);
-  return (combined ?? media.formats[0]).format_id;
+  const bestVideo = media.formats.find((f) => f.has_video);
+  return (bestVideo ?? media.formats[0]).format_id;
 }
 
 export function Downloader({ initialUrl = "", autoAnalyze = false }: DownloaderProps) {
@@ -175,12 +175,10 @@ export function Downloader({ initialUrl = "", autoAnalyze = false }: DownloaderP
                   </div>
                 )}
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span>Stream Type:</span>
+                  <span>Format Type:</span>
                   <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                    {selectedFormat.has_video && selectedFormat.has_audio
-                      ? "Video + Audio (Progressive)"
-                      : selectedFormat.has_video
-                      ? "Video Only"
+                    {selectedFormat.has_video
+                      ? "Video (Audio Included)"
                       : "Audio Only"}
                   </span>
                 </div>

@@ -214,27 +214,25 @@ class MediaExtractor:
 
     # -- format normalization ---------------------------------------------------
     def normalize_formats(self, info: dict) -> list[MediaFormat]:
-        """Build the public format list from yt-dlp's real format data.
-
-        No hard-coded quality ladder: only formats yt-dlp actually reports
-        are listed. Deduped by (height, ext, has_video, has_audio); combined
-        (progressive) formats sort before video-only ones at the same height.
+        """Build a clean, curated format list for the user:
+        - Exactly one best MP4 per standard resolution (1080p, 720p, 480p, 360p).
+        - Prioritize combined formats (with audio) over video-only streams.
+        - Exclude low-res pixelated junk (144p, 240p) when good qualities exist.
+        - 1 best audio format (M4A / MP3).
+        - Sorted highest quality to lowest.
         """
-        seen: set[tuple[int, str, bool, bool]] = set()
-        formats: list[MediaFormat] = []
-
-        for raw in info.get("formats") or []:
+        raw_list = info.get("formats") or []
+        parsed = []
+        for raw in raw_list:
             format_id = str(raw.get("format_id") or "")
             ext = str(raw.get("ext") or "")
-            if not format_id or not ext:
+            if not format_id or not ext or format_id.startswith("sb"):
                 continue
+
             has_video = self._has_stream(raw.get("vcodec"))
             has_audio = self._has_stream(raw.get("acodec"))
 
-            # Many platforms (LinkedIn, Facebook, Snapchat) serve progressive
-            # mp4 files but don't expose vcodec/acodec metadata.  When both
-            # are unknown *and* there is a direct URL, assume it is a
-            # combined video+audio stream.
+            # Progressive mp4 without explicit codec info (LinkedIn, FB, etc.)
             if not has_video and not has_audio:
                 direct_url = raw.get("url") or ""
                 if direct_url and ext in ("mp4", "webm", "m4v"):
@@ -243,49 +241,85 @@ class MediaExtractor:
                 else:
                     continue
 
-            # Try to extract height from format_note or URL when missing.
             height = raw.get("height")
             if not isinstance(height, int) or height <= 0:
                 height = self._infer_height(raw)
 
-            if has_video and isinstance(height, int) and height > 0:
-                quality = f"{height}p"
-                dedup_height = height
+            tbr = raw.get("tbr") or raw.get("abr") or 0
+            if not isinstance(tbr, (int, float)):
+                tbr = 0
+
+            parsed.append({
+                "format_id": format_id,
+                "ext": ext,
+                "has_video": has_video,
+                "has_audio": has_audio,
+                "height": height,
+                "tbr": tbr,
+                "raw": raw,
+            })
+
+        # Group video by resolution height
+        video_by_res: dict[int, dict] = {}
+        fallback_videos = []
+        audio_list = []
+
+        for item in parsed:
+            if item["has_video"]:
+                h = item["height"]
+                if isinstance(h, int) and h > 0:
+                    # Skip 144p and 240p unless it's the only resolution available
+                    if h < 360 and len(parsed) > 3:
+                        continue
+                    # Score: has_audio (+1000) > mp4 (+500) > bitrate
+                    score = (1000 if item["has_audio"] else 0) + (500 if item["ext"] == "mp4" else 0) + item["tbr"]
+                    if h not in video_by_res or score > video_by_res[h]["score"]:
+                        video_by_res[h] = {"score": score, "item": item}
+                else:
+                    fallback_videos.append(item)
+            elif item["has_audio"]:
+                audio_list.append(item)
+
+        selected_videos = sorted(
+            [v["item"] for v in video_by_res.values()] or fallback_videos,
+            key=lambda x: x["height"] or 0,
+            reverse=True,
+        )
+
+        audio_list.sort(
+            key=lambda x: (1 if x["ext"] in ("m4a", "mp3") else 0, x["tbr"]),
+            reverse=True,
+        )
+        selected_audio = audio_list[:1] if audio_list else []
+
+        final_formats: list[MediaFormat] = []
+        for item in selected_videos + selected_audio:
+            raw = item["raw"]
+            h = item["height"]
+            has_video = item["has_video"]
+            has_audio = item["has_audio"]
+            if has_video and isinstance(h, int) and h > 0:
+                quality = f"{h}p"
             elif not has_video:
                 quality = "audio"
-                dedup_height = 0
             else:
                 quality = "video"
-                dedup_height = 0
-
-            key = (dedup_height, ext, has_video, has_audio)
-            if key in seen:
-                continue
-            seen.add(key)
 
             filesize = raw.get("filesize") or raw.get("filesize_approx")
-            formats.append(
+            final_formats.append(
                 MediaFormat(
-                    format_id=format_id,
-                    ext=ext,
+                    format_id=item["format_id"],
+                    ext=item["ext"],
                     quality=quality,
                     width=raw.get("width"),
-                    height=height if isinstance(height, int) else None,
+                    height=h if isinstance(h, int) else None,
                     filesize=filesize if isinstance(filesize, int) else None,
                     has_video=has_video,
                     has_audio=has_audio,
                 )
             )
 
-        formats.sort(
-            key=lambda f: (
-                f.height if f.height is not None else -1,
-                f.has_audio,
-                f.has_video,
-            ),
-            reverse=True,
-        )
-        return formats
+        return final_formats
 
     @staticmethod
     def _has_stream(codec: object) -> bool:

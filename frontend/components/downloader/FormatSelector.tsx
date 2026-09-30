@@ -14,7 +14,7 @@ interface FormatSelectorProps {
   disabled?: boolean;
 }
 
-type TabType = "all" | "combined" | "audio" | "video_only";
+type TabType = "video" | "audio";
 
 export function FormatSelector({
   formats,
@@ -22,38 +22,28 @@ export function FormatSelector({
   onSelect,
   disabled = false,
 }: FormatSelectorProps) {
-  const [activeTab, setActiveTab] = React.useState<TabType>("combined");
+  const hasVideo = React.useMemo(() => formats.some((f) => f.has_video), [formats]);
+  const hasAudio = React.useMemo(() => formats.some((f) => !f.has_video), [formats]);
 
-  // Determine available categories
-  const hasCombined = React.useMemo(() => formats.some((f) => f.has_video && f.has_audio), [formats]);
-  const hasAudio = React.useMemo(() => formats.some((f) => !f.has_video && f.has_audio), [formats]);
-  const hasVideoOnly = React.useMemo(() => formats.some((f) => f.has_video && !f.has_audio), [formats]);
+  const [activeTab, setActiveTab] = React.useState<TabType>(hasVideo ? "video" : "audio");
 
-  // Adjust default tab if no combined formats exist
   React.useEffect(() => {
-    if (!hasCombined && hasAudio) {
+    if (!hasVideo && hasAudio) {
       setActiveTab("audio");
-    } else if (!hasCombined && hasVideoOnly) {
-      setActiveTab("video_only");
+    } else if (hasVideo) {
+      setActiveTab("video");
     }
-  }, [hasCombined, hasAudio, hasVideoOnly]);
+  }, [hasVideo, hasAudio]);
 
-  const filteredFormats = React.useMemo(() => {
-    switch (activeTab) {
-      case "combined":
-        return formats.filter((f) => f.has_video && f.has_audio);
-      case "audio":
-        return formats.filter((f) => !f.has_video && f.has_audio);
-      case "video_only":
-        return formats.filter((f) => f.has_video && !f.has_audio);
-      case "all":
-      default:
-        return formats;
+  const videoFormats = React.useMemo(() => formats.filter((f) => f.has_video), [formats]);
+  const audioFormats = React.useMemo(() => formats.filter((f) => !f.has_video), [formats]);
+
+  const displayFormats = React.useMemo(() => {
+    if (activeTab === "audio") {
+      return audioFormats.length > 0 ? audioFormats : formats;
     }
-  }, [formats, activeTab]);
-
-  // If filtered list is empty, fallback to showing all
-  const displayFormats = filteredFormats.length > 0 ? filteredFormats : formats;
+    return videoFormats.length > 0 ? videoFormats : formats;
+  }, [formats, activeTab, audioFormats, videoFormats]);
 
   if (formats.length === 0) {
     return (
@@ -65,21 +55,21 @@ export function FormatSelector({
 
   return (
     <div className="flex flex-col gap-3.5">
-      {/* Filter Tabs for quick selection */}
+      {/* Category Tabs: Video or Audio */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-medium">
-        {hasCombined && (
+        {hasVideo && (
           <button
             type="button"
-            onClick={() => setActiveTab("combined")}
+            onClick={() => setActiveTab("video")}
             className={cn(
-              "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-all cursor-pointer",
-              activeTab === "combined"
+              "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 transition-all cursor-pointer",
+              activeTab === "video"
                 ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                 : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <Sparkles className="size-3.5" />
-            Video + Audio (Best)
+            <Video className="size-3.5" />
+            Video (MP4) {videoFormats.length > 0 && `(${videoFormats.length})`}
           </button>
         )}
 
@@ -88,46 +78,16 @@ export function FormatSelector({
             type="button"
             onClick={() => setActiveTab("audio")}
             className={cn(
-              "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-all cursor-pointer",
+              "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 transition-all cursor-pointer",
               activeTab === "audio"
                 ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                 : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
             <Volume2 className="size-3.5" />
-            Audio Only
+            Audio Only {audioFormats.length > 0 && `(${audioFormats.length})`}
           </button>
         )}
-
-        {hasVideoOnly && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("video_only")}
-            className={cn(
-              "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-all cursor-pointer",
-              activeTab === "video_only"
-                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <Video className="size-3.5" />
-            Video Only
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("all")}
-          className={cn(
-            "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-all cursor-pointer",
-            activeTab === "all"
-              ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-              : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-          )}
-        >
-          <Filter className="size-3.5" />
-          All ({formats.length})
-        </button>
       </div>
 
       {/* Formats Grid */}
@@ -138,8 +98,8 @@ export function FormatSelector({
       >
         {displayFormats.map((format) => {
           const selected = format.format_id === selectedFormatId;
-          const isCombined = format.has_video && format.has_audio;
-          const isAudioOnly = !format.has_video && format.has_audio;
+          const isVideo = format.has_video;
+          const isHD = (format.height || 0) >= 720;
 
           return (
             <button
@@ -162,17 +122,22 @@ export function FormatSelector({
               <div className="flex min-w-0 flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-foreground">
-                    {format.quality || "Default"}
+                    {format.quality || "Standard"}
                   </span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {format.ext}
                   </span>
-                  {isCombined && (
+                  {isVideo && isHD && (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      HD
+                    </span>
+                  )}
+                  {isVideo && (
                     <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                       Audio Included
                     </span>
                   )}
-                  {isAudioOnly && (
+                  {!isVideo && (
                     <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
                       Audio
                     </span>
