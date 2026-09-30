@@ -2,14 +2,24 @@ version: "3.9"
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: media-downloader-backend
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - MAX_URL_LENGTH=${MAX_URL_LENGTH:-2048}
+      - MAX_DOWNLOAD_BYTES=${MAX_DOWNLOAD_BYTES:-2147483648}
+      - MAX_DURATION_SECONDS=${MAX_DURATION_SECONDS:-14400}
+      - RATE_LIMIT_INFO_PER_MIN=${RATE_LIMIT_INFO_PER_MIN:-20}
+      - RATE_LIMIT_DOWNLOAD_PER_MIN=${RATE_LIMIT_DOWNLOAD_PER_MIN:-5}
+      - REQUEST_TIMEOUT_SECONDS=${REQUEST_TIMEOUT_SECONDS:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
@@ -19,12 +29,19 @@ services:
       start_period: 20s
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: media-downloader-frontend
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       backend:
         condition: service_healthy
