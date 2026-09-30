@@ -106,7 +106,7 @@ class MediaExtractor:
             "retries": 2,
             "js_runtimes": {"node": {}},
             "remote_components": ["ejs:github"],
-            "extractor_args": {"youtube": {"player_client": ["tv", "web", "mweb", "android", "visionos"]}},
+            "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android", "visionos"]}},
         }
         cookiefile = self._get_cookiefile()
         if cookiefile:
@@ -124,11 +124,11 @@ class MediaExtractor:
         try:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-        except DownloadError as exc:
+        except (DownloadError, ExtractorError) as exc:
             # If cookies failed with bot check or auth required or cookie format error, fallback cleanly without cookies
             if "cookiefile" in opts and any(
                 m in str(exc).lower()
-                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie")
+                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie", "reloaded")
             ):
                 logger.warning("Cookies rejected or invalid, retrying without cookies: %s", exc)
                 fallback_opts = dict(opts)
@@ -140,10 +140,6 @@ class MediaExtractor:
                     raise self._map_download_error(exc) from exc
             else:
                 raise self._map_download_error(exc) from exc
-        except ExtractorError as exc:
-            raise MediaUnavailableError(
-                "Could not extract media information from this URL."
-            ) from exc
 
         if not info or info.get("_type") not in (None, "video"):
             raise MediaUnavailableError("No downloadable video found at this URL.")
@@ -386,6 +382,7 @@ class MediaExtractor:
             "outtmpl": outtmpl,
             "merge_output_format": "mp4",
         }
+        opts.pop("extractor_args", None)
         try:
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
