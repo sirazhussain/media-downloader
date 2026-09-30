@@ -106,7 +106,7 @@ class MediaExtractor:
             "retries": 2,
             "js_runtimes": {"node": {}},
             "remote_components": ["ejs:github"],
-            "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android", "visionos"]}},
+            "extractor_args": {"youtube": {"player_client": ["tv", "web", "mweb", "android", "visionos"]}},
         }
         cookiefile = self._get_cookiefile()
         if cookiefile:
@@ -147,8 +147,19 @@ class MediaExtractor:
 
         if not info or info.get("_type") not in (None, "video"):
             raise MediaUnavailableError("No downloadable video found at this URL.")
-        if info.get("is_live"):
-            raise MediaUnavailableError("Live streams are not supported.")
+        live_status = str(info.get("live_status") or "").lower()
+        if info.get("is_live") or live_status == "is_live":
+            raise MediaUnavailableError(
+                "Currently ongoing live streams cannot be downloaded. Please try again after the stream finishes."
+            )
+        if live_status == "is_upcoming":
+            raise MediaUnavailableError(
+                "This video is an upcoming live stream or premiere and has not aired yet."
+            )
+        if live_status == "post_live" and not info.get("formats"):
+            raise MediaUnavailableError(
+                "This live stream has just ended and YouTube is still processing it. Please try again in a few minutes."
+            )
         return info
 
     def _map_download_error(self, exc: DownloadError) -> MediaDownloaderError:
@@ -157,35 +168,53 @@ class MediaExtractor:
             return MediaUnavailableError(
                 "DRM-protected content is not supported."
             )
+        if any(marker in msg for marker in ("private video", "this video is private", "private account")):
+            return MediaUnavailableError(
+                "This video is set to Private by the uploader."
+            )
+        if any(marker in msg for marker in ("members-only", "join this channel", "member only")):
+            return MediaUnavailableError(
+                "This video is restricted to channel members only."
+            )
         if any(
             marker in msg
             for marker in (
-                "private video",
-                "this video is private",
-                "private account",
-                "only available to",
+                "age-verification",
+                "age gated",
+                "confirm your age",
+                "sign in to confirm your age",
+                "inappropriate for some users",
             )
         ):
-            return MediaUnavailableError(
-                "This content is private or unavailable, so it cannot be retrieved."
+            return AuthRequiredError(
+                "This video is age-restricted (18+) by YouTube and requires account age-verification."
             )
         if any(
             marker in msg
             for marker in (
                 "login required",
                 "log in",
-                "sign in",
-                "age-verification",
-                "age gated",
-                "confirm your age",
+                "sign in to confirm",
+                "confirm you're not a bot",
+                "bot",
             )
         ):
-            return AuthRequiredError()
-        if any(marker in msg for marker in ("not available in your country", "geo")):
-            return MediaUnavailableError(
-                "This content is not available in your region."
+            return AuthRequiredError(
+                "This video requires account authentication or bot verification."
             )
-        return MediaUnavailableError("This media is currently unavailable.")
+        if any(marker in msg for marker in ("not available in your country", "geo", "who has blocked it in your country")):
+            return MediaUnavailableError(
+                "This video is not available in the server's geographic region."
+            )
+        if any(marker in msg for marker in ("copyright", "copyright claim", "copyright grounds")):
+            return MediaUnavailableError(
+                "This video is unavailable due to a copyright claim."
+            )
+        if any(marker in msg for marker in ("premiere", "upcoming")):
+            return MediaUnavailableError(
+                "This video is an upcoming live stream or premiere and has not aired yet."
+            )
+        return MediaUnavailableError("This media is currently unavailable or restricted by the platform.")
 
     # -- format normalization ---------------------------------------------------
     def normalize_formats(self, info: dict) -> list[MediaFormat]:
