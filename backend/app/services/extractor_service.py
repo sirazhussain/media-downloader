@@ -146,10 +146,24 @@ class MediaExtractor:
                 continue
             has_video = self._has_stream(raw.get("vcodec"))
             has_audio = self._has_stream(raw.get("acodec"))
-            if not has_video and not has_audio:
-                continue
 
+            # Many platforms (LinkedIn, Facebook, Snapchat) serve progressive
+            # mp4 files but don't expose vcodec/acodec metadata.  When both
+            # are unknown *and* there is a direct URL, assume it is a
+            # combined video+audio stream.
+            if not has_video and not has_audio:
+                direct_url = raw.get("url") or ""
+                if direct_url and ext in ("mp4", "webm", "m4v"):
+                    has_video = True
+                    has_audio = True
+                else:
+                    continue
+
+            # Try to extract height from format_note or URL when missing.
             height = raw.get("height")
+            if not isinstance(height, int) or height <= 0:
+                height = self._infer_height(raw)
+
             if has_video and isinstance(height, int) and height > 0:
                 quality = f"{height}p"
                 dedup_height = height
@@ -193,6 +207,25 @@ class MediaExtractor:
     def _has_stream(codec: object) -> bool:
         return bool(codec) and codec != "none"
 
+    # Height inference for platforms that don't provide explicit metadata.
+    _HEIGHT_RE = re.compile(r"(\d{3,4})p")
+
+    @classmethod
+    def _infer_height(cls, raw: dict) -> int | None:
+        """Try to pull a resolution height from format_note or the URL itself.
+
+        LinkedIn URLs look like ``/mp4-720p-30fp-crf28/…`` — this helper
+        picks up the ``720`` and returns it as an int.
+        """
+        for field in ("format_note", "format", "url"):
+            value = raw.get(field)
+            if not isinstance(value, str):
+                continue
+            m = cls._HEIGHT_RE.search(value)
+            if m:
+                return int(m.group(1))
+        return None
+
     # -- download resolution ------------------------------------------------------
     def resolve_format(self, url: str, format_id: str) -> ResolvedFormat:
         """Re-extract and validate ``format_id`` against fresh data.
@@ -211,6 +244,14 @@ class MediaExtractor:
             ext = str(raw.get("ext") or "mp4")
             has_video = self._has_stream(raw.get("vcodec"))
             has_audio = self._has_stream(raw.get("acodec"))
+
+            # Progressive mp4 without explicit codec info (LinkedIn, FB, etc.)
+            if not has_video and not has_audio:
+                direct_url = raw.get("url")
+                if direct_url and ext in ("mp4", "webm", "m4v"):
+                    has_video = True
+                    has_audio = True
+
             needs_mux = has_video and not has_audio
             direct_url = raw.get("url")
             if needs_mux or not direct_url:

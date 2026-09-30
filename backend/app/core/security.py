@@ -110,13 +110,32 @@ class RateLimitedError(MediaDownloaderError):
 # ---------------------------------------------------------------------------
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
 INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com"}
-ALLOWED_HOSTS = YOUTUBE_HOSTS | INSTAGRAM_HOSTS
+LINKEDIN_HOSTS = {"linkedin.com", "www.linkedin.com"}
+TWITTER_HOSTS = {"twitter.com", "www.twitter.com", "x.com", "www.x.com"}
+FACEBOOK_HOSTS = {
+    "facebook.com", "www.facebook.com", "m.facebook.com",
+    "fb.watch", "www.fb.watch",
+}
+SNAPCHAT_HOSTS = {"snapchat.com", "www.snapchat.com", "story.snapchat.com", "t.snapchat.com"}
+ALLOWED_HOSTS = (
+    YOUTUBE_HOSTS | INSTAGRAM_HOSTS | LINKEDIN_HOSTS
+    | TWITTER_HOSTS | FACEBOOK_HOSTS | SNAPCHAT_HOSTS
+)
 
 _ID_PATTERN = r"[\w\-]{6,}"
 _YOUTUBE_SHORT_ID = re.compile(rf"^/{_ID_PATTERN}/?$")
 _YOUTUBE_SHORTS = re.compile(rf"^/shorts/{_ID_PATTERN}/?$")
 _YOUTUBE_EMBED = re.compile(rf"^/embed/{_ID_PATTERN}/?$")
 _INSTAGRAM_REEL = re.compile(r"^/reel/[\w\-\.]+/?$")
+# LinkedIn: /posts/..., /feed/update/...  or  /embed/feed/update/...
+_LINKEDIN_POST = re.compile(r"^/(posts|feed/update|embed/feed/update)/[\w\-:]+/?$")
+_LINKEDIN_VIDEO = re.compile(r"^/video/[\w\-]+/?$")
+# Twitter/X: /<user>/status/<id>
+_TWITTER_STATUS = re.compile(r"^/[\w]+/status/\d+/?$")
+# Facebook: /watch, /reel/, /<user>/videos/, /share/v/
+_FACEBOOK_WATCH = re.compile(r"^/(watch(/\d+)?|reel/\d+|[\w.]+/videos/\d+|share/v/\d+)/?$")
+# Snapchat: /spotlight/, /add/<user>/<story>
+_SNAPCHAT_SPOTLIGHT = re.compile(r"^/(spotlight/[\w\-]+|add/[\w\.\-]+(/[\w\-]+)?)/?$")
 
 
 def _detect_platform(host: str, path: str, query: str) -> str:
@@ -139,6 +158,36 @@ def _detect_platform(host: str, path: str, query: str) -> str:
             return "instagram"
         raise UnsupportedPlatformError(
             "Only public Instagram reels (instagram.com/reel/...) are supported."
+        )
+
+    if host in LINKEDIN_HOSTS:
+        if _LINKEDIN_POST.fullmatch(path) or _LINKEDIN_VIDEO.fullmatch(path):
+            return "linkedin"
+        raise UnsupportedPlatformError(
+            "Only LinkedIn video posts (linkedin.com/posts/... or linkedin.com/video/...) are supported."
+        )
+
+    if host in TWITTER_HOSTS:
+        if _TWITTER_STATUS.fullmatch(path):
+            return "twitter"
+        raise UnsupportedPlatformError(
+            "Only Twitter/X status posts (x.com/<user>/status/<id>) are supported."
+        )
+
+    if host in FACEBOOK_HOSTS:
+        if host in {"fb.watch", "www.fb.watch"}:
+            return "facebook"
+        if _FACEBOOK_WATCH.fullmatch(path):
+            return "facebook"
+        raise UnsupportedPlatformError(
+            "Only Facebook video URLs (facebook.com/watch, /reel/, /videos/) are supported."
+        )
+
+    if host in SNAPCHAT_HOSTS:
+        if _SNAPCHAT_SPOTLIGHT.fullmatch(path):
+            return "snapchat"
+        raise UnsupportedPlatformError(
+            "Only Snapchat Spotlight URLs (snapchat.com/spotlight/...) are supported."
         )
 
     raise UnsupportedPlatformError(f"Domain '{host}' is not supported.")
@@ -169,9 +218,11 @@ def _assert_public_dns(host: str) -> None:
 def validate_media_url(raw_url: str, *, max_length: int = 2048) -> tuple[str, str]:
     """Validate a user-supplied media URL.
 
-    Returns ``(platform, canonical_url)`` where platform is ``"youtube"`` or
-    ``"instagram"``. Raises a :class:`MediaDownloaderError` subclass carrying
-    a public error code on any failure.
+    Returns ``(platform, canonical_url)`` where platform is one of
+    ``"youtube"``, ``"instagram"``, ``"linkedin"``, ``"twitter"``,
+    ``"facebook"``, or ``"snapchat"``.  Raises a
+    :class:`MediaDownloaderError` subclass carrying a public error code
+    on any failure.
     """
     url = (raw_url or "").strip()
     if not url:

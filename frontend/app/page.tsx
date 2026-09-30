@@ -1,49 +1,39 @@
-import { Download, Youtube, Instagram, Zap, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ShieldCheck, Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Downloader } from "@/components/downloader/Downloader";
 
-const PLATFORMS = [
-  { label: "YouTube", icon: Youtube },
-  { label: "YouTube Shorts", icon: Zap },
-  { label: "Instagram Reels", icon: Instagram },
-];
-
 export default function Home() {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 py-10 sm:px-6 sm:py-16">
-      <header className="flex flex-col items-center gap-4 text-center">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-          <Download className="size-6" aria-hidden />
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 sm:px-6 lg:px-8 py-8 sm:py-14">
+      {/* Header with entrance animation */}
+      <header className="flex flex-col items-center gap-3.5 text-center animate-fade-in">
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs animate-bounce-subtle">
+          <Sparkles className="size-3.5" />
+          <span>Fast, Free & Private</span>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+
+        <h1 className="text-3xl tracking-tight sm:text-5xl text-foreground">
           Media Downloader
         </h1>
-        <p className="max-w-md text-balance text-muted-foreground">
-          Download supported media you own or are authorized to use
+        <p className="max-w-xl text-balance text-sm sm:text-base text-muted-foreground leading-relaxed">
+          Download videos from YouTube, Instagram, LinkedIn, Twitter/X, Facebook & Snapchat — streams directly to your device.
         </p>
       </header>
 
-      <section className="mt-10">
+      {/* Main Downloader */}
+      <section className="mt-8 sm:mt-12 animate-fade-in-up" style={{ animationDelay: "150ms", opacity: 0 }}>
         <Downloader />
       </section>
 
-      <section className="mt-10 flex flex-wrap items-center justify-center gap-2">
-        {PLATFORMS.map(({ label, icon: Icon }) => (
-          <Badge key={label} variant="outline" className="gap-1.5 py-1.5">
-            <Icon className="size-4" aria-hidden />
-            {label}
-          </Badge>
-        ))}
-      </section>
+      <Separator className="my-12 opacity-50" />
 
-      <Separator className="my-10" />
-
-      <footer className="flex flex-col items-center gap-3 pb-6 text-center">
-        <p className="flex max-w-xl items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-          <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Only download content you own or are authorized to download. This
-          app does not bypass DRM, paywalls, or private-content restrictions.
+      {/* Footer */}
+      <footer className="flex flex-col items-center gap-3 pb-8 text-center text-xs text-muted-foreground animate-fade-in" style={{ animationDelay: "300ms", opacity: 0 }}>
+        <p className="flex max-w-xl items-center justify-center gap-2 leading-relaxed">
+          <ShieldCheck className="size-4 shrink-0 text-emerald-500" aria-hidden />
+          <span>
+            Only download media you own or are authorized to use. No files are stored permanently on our servers.
+          </span>
         </p>
       </footer>
     </main>

@@ -3,12 +3,15 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
-  title: "Media Downloader",
+  title: "Media Downloader — YouTube, Instagram, LinkedIn, Twitter, Facebook, Snapchat",
   description:
-    "Download supported media you own or are authorized to use — YouTube and Instagram Reels.",
+    "Download videos from YouTube, Instagram Reels, LinkedIn, Twitter/X, Facebook & Snapchat. Fast, free, and private.",
 };
 
 export default function RootLayout({
@@ -17,8 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={cn("min-h-screen bg-background", inter.className)}>
+    <html lang="en" className={inter.variable}>
+      <body
+        className={cn(
+          "min-h-screen bg-background font-sans antialiased",
+          inter.className
+        )}
+      >
         {children}
       </body>
     </html>

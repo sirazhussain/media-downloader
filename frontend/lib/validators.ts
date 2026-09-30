@@ -7,6 +7,21 @@ const SUPPORTED_HOSTS = [
   "youtu.be",
   "instagram.com",
   "www.instagram.com",
+  "linkedin.com",
+  "www.linkedin.com",
+  "twitter.com",
+  "www.twitter.com",
+  "x.com",
+  "www.x.com",
+  "facebook.com",
+  "www.facebook.com",
+  "m.facebook.com",
+  "fb.watch",
+  "www.fb.watch",
+  "snapchat.com",
+  "www.snapchat.com",
+  "story.snapchat.com",
+  "t.snapchat.com",
 ] as const;
 
 function isSupportedUrl(value: string): boolean {
@@ -37,7 +52,10 @@ export const urlSchema = z.object({
         return false;
       }
     }, "Please enter a valid URL.")
-    .refine(isSupportedUrl, "Only YouTube and Instagram reel URLs are supported."),
+    .refine(
+      isSupportedUrl,
+      "Only YouTube, Instagram, LinkedIn, Twitter/X, Facebook, and Snapchat URLs are supported."
+    ),
 });
 
 export type UrlFormValues = z.infer<typeof urlSchema>;
@@ -47,5 +65,9 @@ export function getPlatformLabel(platform: string): string {
   const lower = platform.toLowerCase();
   if (lower.includes("instagram")) return "Instagram Reel";
   if (lower.includes("youtube")) return "YouTube";
+  if (lower.includes("linkedin")) return "LinkedIn";
+  if (lower.includes("twitter")) return "Twitter / X";
+  if (lower.includes("facebook")) return "Facebook";
+  if (lower.includes("snapchat")) return "Snapchat";
   return platform;
 }

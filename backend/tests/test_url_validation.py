@@ -36,6 +36,62 @@ def test_valid_instagram_reel() -> None:
 @pytest.mark.parametrize(
     "url",
     [
+        "https://www.linkedin.com/posts/username_activity-123456789012345678-abcd",
+        "https://www.linkedin.com/feed/update/urn:li:activity:12345678901234",
+        "https://www.linkedin.com/video/live-now-123456",
+    ],
+)
+def test_valid_linkedin_urls(url: str) -> None:
+    platform, canonical = validate_media_url(url)
+    assert platform == "linkedin"
+    assert canonical.startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://twitter.com/elonmusk/status/1234567890123456789",
+        "https://x.com/user/status/1234567890123456789",
+        "https://www.x.com/user/status/1234567890123456789/",
+    ],
+)
+def test_valid_twitter_urls(url: str) -> None:
+    platform, canonical = validate_media_url(url)
+    assert platform == "twitter"
+    assert canonical.startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.facebook.com/watch/1234567890",
+        "https://www.facebook.com/reel/1234567890",
+        "https://www.facebook.com/username/videos/1234567890",
+        "https://fb.watch/abcde12345/",
+    ],
+)
+def test_valid_facebook_urls(url: str) -> None:
+    platform, canonical = validate_media_url(url)
+    assert platform == "facebook"
+    assert canonical.startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.snapchat.com/spotlight/abc123defgh",
+        "https://www.snapchat.com/add/username/story-id",
+    ],
+)
+def test_valid_snapchat_urls(url: str) -> None:
+    platform, canonical = validate_media_url(url)
+    assert platform == "snapchat"
+    assert canonical.startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
         "ftp://www.youtube.com/watch?v=dQw4w9WgXcQ",  # bad scheme
         "not a url",
         "",
@@ -70,6 +126,16 @@ def test_instagram_non_reel_paths_rejected() -> None:
 def test_youtube_non_video_paths_rejected() -> None:
     with pytest.raises(UnsupportedPlatformError):
         validate_media_url("https://www.youtube.com/channel/UC1234567890")
+
+
+def test_linkedin_non_video_paths_rejected() -> None:
+    with pytest.raises(UnsupportedPlatformError):
+        validate_media_url("https://www.linkedin.com/in/username")
+
+
+def test_twitter_non_status_paths_rejected() -> None:
+    with pytest.raises(UnsupportedPlatformError):
+        validate_media_url("https://x.com/user/followers")
 
 
 @pytest.mark.parametrize(
