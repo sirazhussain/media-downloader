@@ -64,6 +64,7 @@ class MediaExtractor:
     def _get_cookiefile() -> str | None:
         """Write YOUTUBE_COOKIES to a temp file if provided in settings."""
         import base64
+        import re
         import tempfile
         from pathlib import Path
 
@@ -79,8 +80,16 @@ class MediaExtractor:
         except Exception:
             pass
 
+        # Reconstruct newlines if flattened into spaces by Azure Portal UI single-line env var
+        if "\n" not in content or content.count("\n") < 3:
+            content = re.sub(
+                r"\s+(#|\.?[a-zA-Z0-9_-]+\.[a-zA-Z]{2,}\s+(?:TRUE|FALSE))",
+                r"\n\1",
+                content,
+            )
+
         cookie_path = Path(tempfile.gettempdir()) / "yt_cookies.txt"
-        cookie_path.write_text(content, encoding="utf-8")
+        cookie_path.write_text(content.strip() + "\n", encoding="utf-8")
         return str(cookie_path)
 
     # -- yt-dlp configuration ------------------------------------------------
@@ -92,6 +101,7 @@ class MediaExtractor:
             "socket_timeout": self._socket_timeout,
             "retries": 2,
             "js_runtimes": {"node": {}},
+            "remote_components": ["ejs:github"],
         }
         cookiefile = self._get_cookiefile()
         if cookiefile:
