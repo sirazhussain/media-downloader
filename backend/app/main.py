@@ -35,17 +35,29 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
 
+    # Allow Vercel preview & production deployments automatically
+    cors_kwargs = {
+        "allow_methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["*"],
+        "expose_headers": ["Content-Disposition"],
+        "allow_origin_regex": r"^https?://.*\.vercel\.app$",
+    }
+
     if "*" in settings.cors_origins:
         logger.warning("CORS allows all origins; restrict this in production.")
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
-        expose_headers=["Content-Disposition"],
-    )
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            **cors_kwargs,
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            **cors_kwargs,
+        )
 
     @app.middleware("http")
     async def request_logging(request: Request, call_next):  # type: ignore[no-untyped-def]
