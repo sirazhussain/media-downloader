@@ -88,9 +88,9 @@ class MediaExtractor:
     """Thin, honest wrapper around yt-dlp. All yt-dlp specifics live here."""
 
     _cache = InfoCache(maxsize=200, ttl=900)
-    _cookies_blocked: bool = False
+    _cookies_cooldown_until: float = 0.0  # timestamp; cookies suppressed until this time
 
-    def __init__(self, *, socket_timeout: int = 15) -> None:
+    def __init__(self, *, socket_timeout: int = 30) -> None:
         self._socket_timeout = socket_timeout
 
     @staticmethod
@@ -130,55 +130,103 @@ class MediaExtractor:
         return str(cookie_path)
 
     # -- yt-dlp configuration ------------------------------------------------
-    def _base_opts(self) -> dict:
+    @staticmethod
+    def _cookies_available() -> bool:
+        """True if cookies exist AND the cooldown period has elapsed."""
+        import time
+
+        if time.time() < MediaExtractor._cookies_cooldown_until:
+            return False
+        return MediaExtractor._get_cookiefile() is not None
+
+    @staticmethod
+    def _suppress_cookies(seconds: int = 300) -> None:
+        """Temporarily suppress cookies for *seconds* (default 5 min)."""
+        import time
+
+        MediaExtractor._cookies_cooldown_until = time.time() + seconds
+
+    def _base_opts(self, *, use_cookies: bool = True, use_android_client: bool = False) -> dict:
+        """Build yt-dlp options.
+
+        Strategy:
+        - When cookies are available AND use_cookies is True:
+          use default yt-dlp client selection (best compatibility, 60+ formats).
+        - When cookies are NOT available or use_cookies is False:
+          force android client (bypasses bot checks, limited to 360p but reliable).
+        """
         opts: dict[str, object] = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
             "socket_timeout": self._socket_timeout,
-            "retries": 2,
+            "retries": 3,
             "js_runtimes": {"node": {}},
             "remote_components": ["ejs:github"],
-            "extractor_args": {"youtube": {"player_client": ["android", "web", "mweb"]}},
         }
-        cookiefile = None if MediaExtractor._cookies_blocked else self._get_cookiefile()
-        if cookiefile:
-            opts["cookiefile"] = cookiefile
+
+        has_cookies = False
+        if use_cookies and self._cookies_available():
+            cookiefile = self._get_cookiefile()
+            if cookiefile:
+                opts["cookiefile"] = cookiefile
+                has_cookies = True
+
+        # When no cookies or explicitly requesting android: use android client
+        # to bypass bot checks. Otherwise let yt-dlp use its default client
+        # selection which works best with cookie auth (60+ formats).
+        if use_android_client or not has_cookies:
+            opts["extractor_args"] = {"youtube": {"player_client": ["android"]}}
+
         proxy = get_settings().proxy_url
         if proxy and proxy.strip():
             opts["proxy"] = proxy.strip()
         return opts
 
     # -- metadata -------------------------------------------------------------
+    _BOT_MARKERS = ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie", "reloaded")
+
     def get_info(self, url: str, use_cache: bool = True) -> dict:
-        """Extract metadata without downloading. Maps yt-dlp failures to
-        clean application errors (never leaks tracebacks). Uses TTL cache to prevent
-        redundant network calls and proxy IP mismatch."""
+        """Extract metadata without downloading.
+
+        Multi-strategy fallback chain:
+        1. cookies + default client  → best (60+ formats, all resolutions)
+        2. no cookies + android      → reliable fallback (bypasses bot check, 360p)
+        3. android-only (no cookies) → last resort
+
+        Maps yt-dlp failures to clean application errors.
+        Uses TTL cache to prevent redundant network calls.
+        """
         if use_cache:
             cached = self._cache.get(url)
             if cached is not None:
                 return cached
 
-        opts = {**self._base_opts(), "skip_download": True}
-        try:
-            with YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-        except (DownloadError, ExtractorError) as exc:
-            # If cookies failed with bot check or auth required or cookie format error, fallback cleanly without cookies
-            if "cookiefile" in opts and any(
-                m in str(exc).lower()
-                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie", "reloaded")
-            ):
-                logger.warning("Cookies rejected or invalid, disabling cookies: %s", exc)
-                MediaExtractor._cookies_blocked = True
-                fallback_opts = dict(opts)
-                fallback_opts.pop("cookiefile", None)
-                try:
-                    with YoutubeDL(fallback_opts) as ydl:
-                        info = ydl.extract_info(url, download=False)
-                except Exception:
+        # --- Strategy 1: cookies + default client (best quality) ---
+        info = None
+        if self._cookies_available():
+            opts = {**self._base_opts(use_cookies=True), "skip_download": True}
+            try:
+                with YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                logger.info("extraction succeeded with cookies + default client")
+            except (DownloadError, ExtractorError) as exc:
+                exc_msg = str(exc).lower()
+                if any(m in exc_msg for m in self._BOT_MARKERS):
+                    logger.warning("Cookies rejected, cooling down for 5 min: %s", str(exc)[:200])
+                    self._suppress_cookies(300)
+                    info = None  # fall through to strategy 2
+                else:
                     raise self._map_download_error(exc) from exc
-            else:
+
+        # --- Strategy 2: android client without cookies (bot-check bypass) ---
+        if info is None:
+            opts = {**self._base_opts(use_cookies=False, use_android_client=True), "skip_download": True}
+            try:
+                with YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                logger.info("extraction succeeded with android client (no cookies)")
+            except (DownloadError, ExtractorError) as exc:
                 raise self._map_download_error(exc) from exc
 
         if not info or info.get("_type") not in (None, "video"):
@@ -476,8 +524,10 @@ class MediaExtractor:
 
         tmpdir = tempfile.mkdtemp(prefix="media_dl_")
         outtmpl = os.path.join(tmpdir, "media.%(ext)s")
+
+        # Strategy 1: cookies + default client (best quality)
         opts = {
-            **self._base_opts(),
+            **self._base_opts(use_cookies=True),
             "format": format_spec,
             "outtmpl": outtmpl,
             "merge_output_format": merge_fmt,
@@ -486,10 +536,19 @@ class MediaExtractor:
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
         except (DownloadError, ExtractorError) as exc:
-            logger.warning("Initial download failed (%s), retrying with best stream fallback", exc)
-            fallback_opts = dict(opts)
-            fallback_opts.pop("cookiefile", None)
-            fallback_opts["format"] = "bestvideo+bestaudio/best"
+            exc_msg = str(exc).lower()
+            logger.warning("download attempt 1 failed: %s", str(exc)[:200])
+
+            # Strategy 2: android client (bot-check bypass)
+            if any(m in exc_msg for m in self._BOT_MARKERS):
+                self._suppress_cookies(300)
+
+            fallback_opts = {
+                **self._base_opts(use_cookies=False, use_android_client=True),
+                "format": "bestvideo+bestaudio/best",
+                "outtmpl": outtmpl,
+                "merge_output_format": merge_fmt,
+            }
             try:
                 with YoutubeDL(fallback_opts) as ydl:
                     ydl.download([url])

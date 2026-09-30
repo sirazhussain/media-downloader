@@ -20,7 +20,7 @@ from app.core.security import DownloadTooLargeError, MediaUnavailableError, SSRF
 
 logger = get_logger(__name__)
 
-_CHUNK_SIZE = 65536  # 64 KiB
+_CHUNK_SIZE = 262_144  # 256 KiB — larger chunks = faster throughput for big files
 
 
 def _assert_remote_url_allowed(url: str) -> None:

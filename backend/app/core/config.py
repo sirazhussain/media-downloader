@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     max_duration_seconds: int = 14400  # 4 hours
     rate_limit_info_per_min: int = 20
     rate_limit_download_per_min: int = 5
-    request_timeout_seconds: int = 30
-    yt_dlp_socket_timeout: int = 15
+    request_timeout_seconds: int = 600  # 10 min for large file streaming
+    yt_dlp_socket_timeout: int = 30
     youtube_cookies: str | None = None
     proxy_url: str | None = None
 
