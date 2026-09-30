@@ -54,8 +54,41 @@ class ResolvedFormat:
         self.filesize = filesize
 
 
+class InfoCache:
+    """Thread-safe LRU+TTL cache for extracted media info."""
+
+    def __init__(self, maxsize: int = 200, ttl: int = 900) -> None:
+        import time
+        from collections import OrderedDict
+
+        self._cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+        self._maxsize = maxsize
+        self._ttl = ttl
+
+    def get(self, url: str) -> dict | None:
+        import time
+
+        if url in self._cache:
+            ts, info = self._cache[url]
+            if time.time() - ts < self._ttl:
+                self._cache.move_to_end(url)
+                return info
+            del self._cache[url]
+        return None
+
+    def set(self, url: str, info: dict) -> None:
+        import time
+
+        self._cache[url] = (time.time(), info)
+        if len(self._cache) > self._maxsize:
+            self._cache.popitem(last=False)
+
+
 class MediaExtractor:
     """Thin, honest wrapper around yt-dlp. All yt-dlp specifics live here."""
+
+    _cache = InfoCache(maxsize=200, ttl=900)
+    _cookies_blocked: bool = False
 
     def __init__(self, *, socket_timeout: int = 15) -> None:
         self._socket_timeout = socket_timeout
@@ -108,7 +141,7 @@ class MediaExtractor:
             "remote_components": ["ejs:github"],
             "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android", "visionos"]}},
         }
-        cookiefile = self._get_cookiefile()
+        cookiefile = None if MediaExtractor._cookies_blocked else self._get_cookiefile()
         if cookiefile:
             opts["cookiefile"] = cookiefile
         proxy = get_settings().proxy_url
@@ -117,9 +150,15 @@ class MediaExtractor:
         return opts
 
     # -- metadata -------------------------------------------------------------
-    def get_info(self, url: str) -> dict:
+    def get_info(self, url: str, use_cache: bool = True) -> dict:
         """Extract metadata without downloading. Maps yt-dlp failures to
-        clean application errors (never leaks tracebacks)."""
+        clean application errors (never leaks tracebacks). Uses TTL cache to prevent
+        redundant network calls and proxy IP mismatch."""
+        if use_cache:
+            cached = self._cache.get(url)
+            if cached is not None:
+                return cached
+
         opts = {**self._base_opts(), "skip_download": True}
         try:
             with YoutubeDL(opts) as ydl:
@@ -130,7 +169,8 @@ class MediaExtractor:
                 m in str(exc).lower()
                 for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie", "reloaded")
             ):
-                logger.warning("Cookies rejected or invalid, retrying without cookies: %s", exc)
+                logger.warning("Cookies rejected or invalid, disabling cookies: %s", exc)
+                MediaExtractor._cookies_blocked = True
                 fallback_opts = dict(opts)
                 fallback_opts.pop("cookiefile", None)
                 try:
@@ -156,6 +196,8 @@ class MediaExtractor:
             raise MediaUnavailableError(
                 "This live stream has just ended and YouTube is still processing it. Please try again in a few minutes."
             )
+
+        self._cache.set(url, info)
         return info
 
     def _map_download_error(self, exc: DownloadError) -> MediaDownloaderError:
@@ -391,8 +433,20 @@ class MediaExtractor:
                 filesize=filesize if isinstance(filesize, int) else None,
             )
 
-        raise FormatNotAvailableError(
-            f"Format '{format_id}' is not available for this media."
+        # Resilient fallback: dynamic streams or format IDs can vary across proxy IPs.
+        # Fall back to muxing with yt-dlp which can resolve the stream gracefully.
+        logger.info(
+            "Format '%s' not found in raw list; falling back to resilient muxing for %s",
+            format_id,
+            safe_host(url),
+        )
+        return ResolvedFormat(
+            format_id=format_id,
+            ext="mp4",
+            title=title,
+            direct_url=None,
+            needs_mux=True,
+            filesize=None,
         )
 
     # -- mux fallback (temporary file, always deleted) ------------------------------
@@ -408,13 +462,20 @@ class MediaExtractor:
         if shutil.which("ffmpeg") is None:
             raise MuxingUnavailableError()
 
+        if format_id in ("140", "249", "250", "251") or "audio" in format_id.lower():
+            format_spec = f"{format_id}/bestaudio/best"
+            merge_fmt = "m4a"
+        else:
+            format_spec = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
+            merge_fmt = "mp4"
+
         tmpdir = tempfile.mkdtemp(prefix="media_dl_")
         outtmpl = os.path.join(tmpdir, "media.%(ext)s")
         opts = {
             **self._base_opts(),
-            "format": f"{format_id}+bestaudio/best",
+            "format": format_spec,
             "outtmpl": outtmpl,
-            "merge_output_format": "mp4",
+            "merge_output_format": merge_fmt,
         }
         opts.pop("extractor_args", None)
         try:
