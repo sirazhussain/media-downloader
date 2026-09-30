@@ -17,6 +17,7 @@ import tempfile
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError, ExtractorError
 
+from app.core.config import get_settings
 from app.core.logging import get_logger, safe_host
 from app.core.security import (
     AuthRequiredError,
@@ -59,18 +60,43 @@ class MediaExtractor:
     def __init__(self, *, socket_timeout: int = 15) -> None:
         self._socket_timeout = socket_timeout
 
+    @staticmethod
+    def _get_cookiefile() -> str | None:
+        """Write YOUTUBE_COOKIES to a temp file if provided in settings."""
+        import base64
+        import tempfile
+        from pathlib import Path
+
+        cookies = get_settings().youtube_cookies
+        if not cookies or not cookies.strip():
+            return None
+
+        content = cookies.strip()
+        try:
+            decoded = base64.b64decode(content).decode("utf-8")
+            if "# Netscape" in decoded or "\t" in decoded:
+                content = decoded
+        except Exception:
+            pass
+
+        cookie_path = Path(tempfile.gettempdir()) / "yt_cookies.txt"
+        cookie_path.write_text(content, encoding="utf-8")
+        return str(cookie_path)
+
     # -- yt-dlp configuration ------------------------------------------------
     def _base_opts(self) -> dict:
-        return {
+        opts: dict[str, object] = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
             "socket_timeout": self._socket_timeout,
             "retries": 2,
             "js_runtimes": {"node": {}},
-            # Deliberately absent: cookiefile, cookiesfrombrowser, username,
-            # password, or any session/authentication material.
         }
+        cookiefile = self._get_cookiefile()
+        if cookiefile:
+            opts["cookiefile"] = cookiefile
+        return opts
 
     # -- metadata -------------------------------------------------------------
     def get_info(self, url: str) -> dict:

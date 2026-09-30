@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     log_level: str = "INFO"
 
-    # Comma-separated list, e.g. "http://localhost:3000,https://app.example.com"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # Comma-separated list or wildcard, e.g. "*", or "https://a.com,https://b.com"
+    cors_origins: str | list[str] = ["http://localhost:3000"]
 
     max_url_length: int = 2048
     max_download_bytes: int = 2_147_483_648  # 2 GiB
@@ -29,13 +29,16 @@ class Settings(BaseSettings):
     rate_limit_download_per_min: int = 5
     request_timeout_seconds: int = 30
     yt_dlp_socket_timeout: int = 15
+    youtube_cookies: str | None = None
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", mode="after")
     @classmethod
-    def split_cors_origins(cls, value: object) -> object:
+    def split_cors_origins(cls, value: object) -> list[str]:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+        if isinstance(value, list):
+            return [str(origin).strip() for origin in value if str(origin).strip()]
+        return ["http://localhost:3000"]
 
 
 @lru_cache
