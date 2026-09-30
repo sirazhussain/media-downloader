@@ -163,7 +163,7 @@ class MediaExtractor:
         extractor_args: dict[str, dict] = {}
         if use_android_client:
             extractor_args["youtube"] = {"player_client": ["android"]}
-        elif not (use_cookies and self._has_cookies()):
+        else:
             extractor_args["youtubepot-bgutilhttp"] = {"base_url": ["http://127.0.0.1:4416"]}
 
         opts["extractor_args"] = extractor_args
