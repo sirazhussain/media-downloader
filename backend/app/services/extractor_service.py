@@ -163,7 +163,7 @@ class MediaExtractor:
         extractor_args: dict[str, dict] = {}
         if use_android_client:
             extractor_args["youtube"] = {"player_client": ["android"]}
-        else:
+        elif not (use_cookies and self._has_cookies()):
             extractor_args["youtubepot-bgutilhttp"] = {"base_url": ["http://127.0.0.1:4416"]}
 
         opts["extractor_args"] = extractor_args
@@ -172,6 +172,10 @@ class MediaExtractor:
             cookiefile = self._get_cookiefile()
             if cookiefile:
                 opts["cookiefile"] = cookiefile
+
+        proxy = get_settings().proxy_url
+        if proxy and proxy.strip():
+            opts["proxy"] = proxy.strip()
 
         return opts
 

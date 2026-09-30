@@ -48,6 +48,7 @@ def _assert_remote_url_allowed(url: str) -> None:
 
 class StreamingService:
     def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._max_bytes = settings.max_download_bytes
         self._timeout = settings.request_timeout_seconds
 
@@ -64,6 +65,8 @@ class StreamingService:
             "follow_redirects": True,
             "max_redirects": 5,
         }
+        if self._settings.proxy_url and self._settings.proxy_url.strip():
+            client_kwargs["proxy"] = self._settings.proxy_url.strip()
 
         req_headers = {
             "User-Agent": (
