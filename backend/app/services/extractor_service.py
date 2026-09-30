@@ -45,6 +45,7 @@ class ResolvedFormat:
         direct_url: str | None,
         needs_mux: bool,
         filesize: int | None,
+        http_headers: dict[str, str] | None = None,
     ) -> None:
         self.format_id = format_id
         self.ext = ext
@@ -52,6 +53,7 @@ class ResolvedFormat:
         self.direct_url = direct_url
         self.needs_mux = needs_mux
         self.filesize = filesize
+        self.http_headers = http_headers or {}
 
 
 class InfoCache:
@@ -479,6 +481,7 @@ class MediaExtractor:
                     filesize=None,
                 )
             filesize = raw.get("filesize") or raw.get("filesize_approx")
+            http_headers = raw.get("http_headers") or {}
             return ResolvedFormat(
                 format_id=format_id,
                 ext=ext,
@@ -486,6 +489,7 @@ class MediaExtractor:
                 direct_url=str(direct_url),
                 needs_mux=False,
                 filesize=filesize if isinstance(filesize, int) else None,
+                http_headers=http_headers,
             )
 
         # Resilient fallback: dynamic streams or format IDs can vary across proxy IPs.

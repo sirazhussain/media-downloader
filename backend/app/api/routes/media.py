@@ -84,12 +84,16 @@ async def _execute_download(raw_url: str, format_id: str, request: Request) -> S
 
     filename = build_safe_filename(resolved.title or "download", resolved.ext)
     headers = {"Content-Disposition": _content_disposition(filename)}
+    if resolved.filesize:
+        headers["Content-Length"] = str(resolved.filesize)
     media_type = _content_type_for_ext(resolved.ext)
 
     if resolved.needs_mux or not resolved.direct_url:
         tmp_path = await asyncio.to_thread(
             _extractor.download_to_temp, url, resolved.format_id
         )
+        if os.path.exists(tmp_path):
+            headers["Content-Length"] = str(os.path.getsize(tmp_path))
 
         async def _file_stream() -> AsyncIterator[bytes]:
             try:
@@ -105,7 +109,10 @@ async def _execute_download(raw_url: str, format_id: str, request: Request) -> S
         return StreamingResponse(_file_stream(), media_type=media_type, headers=headers)
 
     async def _remote_stream() -> AsyncIterator[bytes]:
-        async for chunk in _streaming_service.stream_remote(resolved.direct_url or ""):
+        async for chunk in _streaming_service.stream_remote(
+            resolved.direct_url or "",
+            custom_headers=resolved.http_headers,
+        ):
             yield chunk
 
     logger.info(

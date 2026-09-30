@@ -51,7 +51,11 @@ class StreamingService:
         self._max_bytes = settings.max_download_bytes
         self._timeout = settings.request_timeout_seconds
 
-    async def stream_remote(self, url: str) -> AsyncIterator[bytes]:
+    async def stream_remote(
+        self,
+        url: str,
+        custom_headers: dict[str, str] | None = None,
+    ) -> AsyncIterator[bytes]:
         """Yield media bytes from a direct URL, aborting past the size cap."""
         _assert_remote_url_allowed(url)
         total = 0
@@ -61,20 +65,33 @@ class StreamingService:
             "max_redirects": 5,
         }
 
+        req_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "*/*",
+            "Accept-Encoding": "identity",
+        }
+        if custom_headers:
+            for k, v in custom_headers.items():
+                if v and k.lower() not in ("host", "content-length"):
+                    req_headers[k] = str(v)
+
         try:
             async with httpx.AsyncClient(**client_kwargs) as client:
                 async with client.stream(
                     "GET",
                     url,
-                    headers={
-                        "User-Agent": (
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) "
-                            "Chrome/124.0.0.0 Safari/537.36"
-                        )
-                    },
+                    headers=req_headers,
                 ) as response:
                     if response.status_code >= 400:
+                        logger.warning(
+                            "Remote stream returned HTTP %d for %s",
+                            response.status_code,
+                            url[:80],
+                        )
                         raise MediaUnavailableError(
                             "The media source returned an error."
                         )
