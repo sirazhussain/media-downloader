@@ -28,13 +28,45 @@ export default function Home() {
       <Separator className="my-12 opacity-50" />
 
       {/* Footer */}
-      <footer className="flex flex-col items-center gap-3 pb-8 text-center text-xs text-muted-foreground animate-fade-in" style={{ animationDelay: "300ms", opacity: 0 }}>
-        <p className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 leading-relaxed px-4 max-w-md sm:max-w-xl">
-          <ShieldCheck className="size-4 shrink-0 text-emerald-500" aria-hidden />
-          <span className="text-center">
-            Only download media you own or are authorized to use. No files are stored permanently on our servers.
+      <footer className="mt-8 flex flex-col items-center gap-6 pb-12 w-full animate-fade-in">
+        {/* Security & Fair Use Notice Card */}
+        <div className="w-full max-w-2xl rounded-2xl border border-border/80 bg-muted/40 backdrop-blur-sm p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3.5">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="size-5" aria-hidden />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <span className="text-xs sm:text-sm font-semibold text-foreground">
+                  Fair Use & Privacy Policy
+                </span>
+                <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                  Zero Storage
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed text-balance">
+                Only download media you own or have explicit permission to use. We stream media directly to your browser — no videos, audio, or logs are permanently stored on our servers.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Credits & Badges */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full max-w-2xl text-xs text-muted-foreground px-2">
+          <span>
+            © {new Date().getFullYear()} Media Downloader. Free & Open Source.
           </span>
-        </p>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="inline-flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+              100% Private
+            </span>
+            <span>•</span>
+            <span>Fast CDN</span>
+            <span>•</span>
+            <span>Direct Stream</span>
+          </div>
+        </div>
       </footer>
     </main>
   );
