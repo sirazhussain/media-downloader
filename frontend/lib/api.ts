@@ -113,3 +113,11 @@ export async function downloadMedia(
 
   return { blob, filename };
 }
+
+/**
+ * Direct download link for native browser download streaming.
+ * Bypasses JavaScript blob memory buffering for instant download start.
+ */
+export function getDirectDownloadUrl(url: string, formatId: string): string {
+  return `${API_BASE}/api/v1/media/download?url=${encodeURIComponent(url)}&format_id=${encodeURIComponent(formatId)}`;
+}

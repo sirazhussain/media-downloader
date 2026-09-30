@@ -7,7 +7,7 @@ import os
 from collections.abc import AsyncIterator
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.config import get_settings
@@ -72,15 +72,14 @@ async def media_info(payload: MediaInfoRequest, request: Request) -> MediaInfoRe
     return await asyncio.to_thread(_media_service.get_media_info, payload.url)
 
 
-@router.post("/download", summary="Stream authorized media to the browser")
-async def download_media(payload: DownloadRequest, request: Request) -> StreamingResponse:
+async def _execute_download(raw_url: str, format_id: str, request: Request) -> StreamingResponse:
     _rate_limiter.check(
         f"download:{_client_ip(request)}",
         _settings.rate_limit_download_per_min,
         window_seconds=60,
     )
     _platform, url, resolved = await asyncio.to_thread(
-        _media_service.resolve_download, payload.url, payload.format_id
+        _media_service.resolve_download, raw_url, format_id
     )
 
     filename = build_safe_filename(resolved.title or "download", resolved.ext)
@@ -88,8 +87,6 @@ async def download_media(payload: DownloadRequest, request: Request) -> Streamin
     media_type = _content_type_for_ext(resolved.ext)
 
     if resolved.needs_mux or not resolved.direct_url:
-        # Clearly-marked fallback: yt-dlp merges to a temp file, we stream it
-        # chunk by chunk, and the file is deleted in the generator's finally.
         tmp_path = await asyncio.to_thread(
             _extractor.download_to_temp, url, resolved.format_id
         )
@@ -118,3 +115,17 @@ async def download_media(payload: DownloadRequest, request: Request) -> Streamin
         extra={"host": safe_host(url), "client_ip": _client_ip(request)},
     )
     return StreamingResponse(_remote_stream(), media_type=media_type, headers=headers)
+
+
+@router.post("/download", summary="Stream authorized media to the browser (POST)")
+async def download_media(payload: DownloadRequest, request: Request) -> StreamingResponse:
+    return await _execute_download(payload.url, payload.format_id, request)
+
+
+@router.get("/download", summary="Stream authorized media directly to the browser (GET)")
+async def download_media_direct(
+    url: str = Query(..., min_length=1, max_length=4096),
+    format_id: str = Query(..., min_length=1, max_length=64),
+    request: Request = None,  # type: ignore[assignment]
+) -> StreamingResponse:
+    return await _execute_download(url, format_id, request)

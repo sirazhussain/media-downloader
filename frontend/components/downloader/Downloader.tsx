@@ -22,7 +22,7 @@ import { FormatSelectorSkeleton } from "./FormatSelector";
 import { DownloadButton } from "./DownloadButton";
 import { DownloadProgress, type DownloadPhase } from "./DownloadProgress";
 import { ErrorMessage, friendlyMessage } from "./ErrorMessage";
-import { getMediaInfo, downloadMedia } from "@/lib/api";
+import { getMediaInfo, getDirectDownloadUrl } from "@/lib/api";
 import { ApiError, type MediaInfo } from "@/types/media";
 import { formatFileSize } from "@/lib/utils";
 
@@ -78,36 +78,27 @@ export function Downloader({ initialUrl = "", autoAnalyze = false }: DownloaderP
     }
   }, [autoAnalyze, initialUrl, analyze]);
 
-  const handleDownload = React.useCallback(async () => {
+  const handleDownload = React.useCallback(() => {
     if (!media || !selectedFormatId || !url) return;
     setError(null);
-    setDownloadPhase("preparing");
+    setDownloadPhase("downloading");
 
     try {
-      const selected = media.formats.find((f) => f.format_id === selectedFormatId);
-      const ext = selected?.ext || "mp4";
-      const fallbackFilename = media.title
-        ? `${media.title.replace(/[/\\:*?"<>|]/g, "").trim()}.${ext}`
-        : `download.${ext}`;
+      const downloadUrl = getDirectDownloadUrl(url, selectedFormatId);
 
-      const { blob, filename } = await downloadMedia(
-        url,
-        selectedFormatId,
-        fallbackFilename
-      );
-      setDownloadPhase("downloading");
-
-      const objectUrl = URL.createObjectURL(blob);
+      // Trigger browser native download manager instantly
       const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = filename;
+      anchor.href = downloadUrl;
+      anchor.setAttribute("download", "");
+      anchor.style.display = "none";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
 
-      setDownloadPhase("done");
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      window.setTimeout(() => setDownloadPhase("idle"), 8000);
+      window.setTimeout(() => {
+        setDownloadPhase("done");
+        window.setTimeout(() => setDownloadPhase("idle"), 5000);
+      }, 1500);
     } catch (err) {
       setDownloadPhase("idle");
       const apiError = err instanceof ApiError ? err : null;

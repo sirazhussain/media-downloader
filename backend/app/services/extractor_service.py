@@ -477,7 +477,6 @@ class MediaExtractor:
             "outtmpl": outtmpl,
             "merge_output_format": merge_fmt,
         }
-        opts.pop("extractor_args", None)
         try:
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
