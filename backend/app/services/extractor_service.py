@@ -111,6 +111,9 @@ class MediaExtractor:
         cookiefile = self._get_cookiefile()
         if cookiefile:
             opts["cookiefile"] = cookiefile
+        proxy = get_settings().proxy_url
+        if proxy and proxy.strip():
+            opts["proxy"] = proxy.strip()
         return opts
 
     # -- metadata -------------------------------------------------------------

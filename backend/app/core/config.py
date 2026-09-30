@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 30
     yt_dlp_socket_timeout: int = 15
     youtube_cookies: str | None = None
+    proxy_url: str | None = None
 
     @field_validator("cors_origins", mode="after")
     @classmethod
