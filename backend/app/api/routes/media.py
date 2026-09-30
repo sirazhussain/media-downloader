@@ -108,8 +108,6 @@ async def _execute_download(raw_url: str, format_id: str, request: Request) -> S
         async for chunk in _streaming_service.stream_remote(resolved.direct_url or ""):
             yield chunk
 
-    if resolved.filesize:
-        headers["Content-Length"] = str(resolved.filesize)
     logger.info(
         "download started (direct stream)",
         extra={"host": safe_host(url), "client_ip": _client_ip(request)},
