@@ -88,6 +88,10 @@ class MediaExtractor:
                 content,
             )
 
+        # Validate that content actually looks like cookie data
+        if "# Netscape" not in content and "\t" not in content:
+            return None
+
         cookie_path = Path(tempfile.gettempdir()) / "yt_cookies.txt"
         cookie_path.write_text(content.strip() + "\n", encoding="utf-8")
         return str(cookie_path)
@@ -102,6 +106,7 @@ class MediaExtractor:
             "retries": 2,
             "js_runtimes": {"node": {}},
             "remote_components": ["ejs:github"],
+            "extractor_args": {"youtube": {"player_client": ["mweb", "web"]}},
         }
         cookiefile = self._get_cookiefile()
         if cookiefile:
@@ -117,7 +122,21 @@ class MediaExtractor:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
         except DownloadError as exc:
-            raise self._map_download_error(exc) from exc
+            # If cookies failed with bot check or auth required or cookie format error, fallback cleanly without cookies
+            if "cookiefile" in opts and any(
+                m in str(exc).lower()
+                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot", "cookie")
+            ):
+                logger.warning("Cookies rejected or invalid, retrying without cookies: %s", exc)
+                fallback_opts = dict(opts)
+                fallback_opts.pop("cookiefile", None)
+                try:
+                    with YoutubeDL(fallback_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                except Exception:
+                    raise self._map_download_error(exc) from exc
+            else:
+                raise self._map_download_error(exc) from exc
         except ExtractorError as exc:
             raise MediaUnavailableError(
                 "Could not extract media information from this URL."
@@ -339,10 +358,25 @@ class MediaExtractor:
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
         except (DownloadError, ExtractorError) as exc:
-            remove_temp_dir(tmpdir)
-            raise MediaUnavailableError(
-                "This media could not be retrieved."
-            ) from exc
+            if "cookiefile" in opts and any(
+                m in str(exc).lower()
+                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot")
+            ):
+                fallback_opts = dict(opts)
+                fallback_opts.pop("cookiefile", None)
+                try:
+                    with YoutubeDL(fallback_opts) as ydl:
+                        ydl.download([url])
+                except Exception:
+                    remove_temp_dir(tmpdir)
+                    raise MediaUnavailableError(
+                        "This media could not be retrieved."
+                    ) from exc
+            else:
+                remove_temp_dir(tmpdir)
+                raise MediaUnavailableError(
+                    "This media could not be retrieved."
+                ) from exc
 
         files = [
             os.path.join(tmpdir, name)
