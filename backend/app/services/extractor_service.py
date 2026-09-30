@@ -1,10 +1,12 @@
 """yt-dlp integration used strictly as a Python library.
 
-Hard legal boundary: yt-dlp is configured WITHOUT cookies, WITHOUT
-``cookies-from-browser``, and WITHOUT any username/password or session
-handling. Only publicly accessible media can be retrieved. When yt-dlp
-reports that content is private, login-gated, or DRM-protected, a clean
-application error is raised instead of attempting any bypass.
+Design principles:
+- Only publicly accessible media is retrieved. Private, login-gated, or DRM-protected
+  media raises structured application errors.
+- By default, operations run without user credentials using PO Token generation.
+- Optional Netscape cookie support (via YOUTUBE_COOKIES) is available for self-hosted instances.
+- PO Token Provider (bgutil HTTP server) handles YouTube Proof-of-Origin challenge tokens.
+- Media retrieval for YouTube is executed by yt-dlp natively to preserve session context and avoid 403 Forbidden errors.
 """
 
 from __future__ import annotations
@@ -33,6 +35,23 @@ logger = get_logger(__name__)
 _FORMAT_ID_RE = re.compile(r"^[\w\-.]+$")
 
 
+class YtDlpLogger:
+    """Routes yt-dlp internal messages to Python's logging system."""
+
+    def debug(self, msg: str) -> None:
+        if not msg.startswith("[debug] "):
+            logger.debug("yt-dlp: %s", msg)
+
+    def info(self, msg: str) -> None:
+        logger.info("yt-dlp: %s", msg)
+
+    def warning(self, msg: str) -> None:
+        logger.warning("yt-dlp: %s", msg)
+
+    def error(self, msg: str) -> None:
+        logger.error("yt-dlp: %s", msg)
+
+
 class ResolvedFormat:
     """A validated, downloadable format chosen from fresh extraction data."""
 
@@ -59,7 +78,7 @@ class ResolvedFormat:
 class InfoCache:
     """Thread-safe LRU+TTL cache for extracted media info."""
 
-    def __init__(self, maxsize: int = 200, ttl: int = 900) -> None:
+    def __init__(self, maxsize: int = 200, ttl: int = 300) -> None:
         import time
         from collections import OrderedDict
 
@@ -89,7 +108,7 @@ class InfoCache:
 class MediaExtractor:
     """Thin, honest wrapper around yt-dlp. All yt-dlp specifics live here."""
 
-    _cache = InfoCache(maxsize=200, ttl=900)
+    _cache = InfoCache(maxsize=200, ttl=300)
 
     def __init__(self, *, socket_timeout: int = 30) -> None:
         self._socket_timeout = socket_timeout
@@ -145,15 +164,21 @@ class MediaExtractor:
         """Build yt-dlp options.
 
         Configures:
+        - Custom YtDlpLogger routing to application logging
         - Node.js runtime for JavaScript challenge solving
-        - bgutil PO Token HTTP provider on 127.0.0.1:4416 (local sidecar)
+        - bgutil PO Token HTTP provider on pot_provider_url
         - Netscape cookies if available
         - Android client only when explicitly requested as a last-resort fallback
         """
+        settings = get_settings()
+        pot_url = settings.pot_provider_url.strip() if settings.pot_provider_url else "http://127.0.0.1:4416"
         opts: dict[str, object] = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "updatetime": False,
+            "continuedl": False,
+            "logger": YtDlpLogger(),
             "socket_timeout": self._socket_timeout,
             "retries": 3,
             "js_runtimes": {"node": {}},
@@ -164,7 +189,7 @@ class MediaExtractor:
         if use_android_client:
             extractor_args["youtube"] = {"player_client": ["android"]}
         else:
-            extractor_args["youtubepot-bgutilhttp"] = {"base_url": ["http://127.0.0.1:4416"]}
+            extractor_args["youtubepot-bgutilhttp"] = {"base_url": [pot_url]}
 
         opts["extractor_args"] = extractor_args
 
@@ -173,7 +198,7 @@ class MediaExtractor:
             if cookiefile:
                 opts["cookiefile"] = cookiefile
 
-        proxy = get_settings().proxy_url
+        proxy = settings.proxy_url
         if proxy and proxy.strip():
             opts["proxy"] = proxy.strip()
 
@@ -185,11 +210,9 @@ class MediaExtractor:
     def get_info(self, url: str, use_cache: bool = True) -> dict:
         """Extract metadata without downloading.
 
-        Multi-strategy fallback chain:
-        1. cookies + PO Token + default clients -> best quality (60+ formats, up to 4K/1080p)
-        2. PO Token without cookies             -> bypasses bot-check on datacenter IPs
-        3. android client (no cookies)          -> last resort safety net (360p / audio)
-
+        Platform-aware extraction:
+        - Non-YouTube (TikTok, Twitter/X, Instagram, etc.): Direct clean extraction.
+        - YouTube: Multi-strategy fallback chain (Cookies+PO -> PO Token -> Android client).
         Maps yt-dlp failures to clean application errors.
         Uses TTL cache to prevent redundant network calls.
         """
@@ -198,45 +221,57 @@ class MediaExtractor:
             if cached is not None:
                 return cached
 
-        # --- Strategy 1: Cookies + PO Token (when cookies provided) ---
+        is_youtube = any(yt_host in url.lower() for yt_host in ("youtube.com", "youtu.be"))
         info = None
         last_exc: Exception | None = None
 
-        if self._has_cookies():
-            opts = {**self._base_opts(use_cookies=True), "skip_download": True}
-            try:
-                with YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                logger.info("extraction succeeded with cookies + PO Token")
-            except (DownloadError, ExtractorError) as exc:
-                last_exc = exc
-                logger.warning("Strategy 1 (cookies) failed: %s", str(exc)[:200])
-                info = None  # fall through to strategy 2
-
-        # --- Strategy 2: PO Token without cookies (bot-check bypass from datacenter IPs) ---
-        if info is None:
+        if not is_youtube:
+            # Direct extraction for non-YouTube platforms
             opts = {**self._base_opts(use_cookies=False, use_android_client=False), "skip_download": True}
             try:
                 with YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
-                logger.info("extraction succeeded with PO Token (no cookies)")
             except (DownloadError, ExtractorError) as exc:
-                last_exc = exc
-                logger.warning("Strategy 2 (PO token without cookies) failed: %s", str(exc)[:200])
-                info = None  # fall through to strategy 3
+                if isinstance(exc, DownloadError):
+                    raise self._map_download_error(exc) from exc
+                raise MediaUnavailableError("Could not retrieve information for this media.") from exc
+        else:
+            # --- YouTube Strategy 1: Cookies + PO Token (when cookies provided) ---
+            if self._has_cookies():
+                opts = {**self._base_opts(use_cookies=True), "skip_download": True}
+                try:
+                    with YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                    logger.info("YouTube extraction succeeded with cookies + PO Token")
+                except (DownloadError, ExtractorError) as exc:
+                    last_exc = exc
+                    logger.warning("YouTube Strategy 1 (cookies) failed: %s", str(exc)[:200])
+                    info = None
 
-        # --- Strategy 3: Android client fallback (guaranteed basic formats) ---
-        if info is None:
-            opts = {**self._base_opts(use_cookies=False, use_android_client=True), "skip_download": True}
-            try:
-                with YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                logger.info("extraction succeeded with android client fallback")
-            except (DownloadError, ExtractorError) as exc:
-                err_to_map = exc or last_exc
-                if isinstance(err_to_map, DownloadError):
-                    raise self._map_download_error(err_to_map) from err_to_map
-                raise self._map_download_error(exc) from exc
+            # --- YouTube Strategy 2: PO Token without cookies (bot-check bypass from datacenter IPs) ---
+            if info is None:
+                opts = {**self._base_opts(use_cookies=False, use_android_client=False), "skip_download": True}
+                try:
+                    with YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                    logger.info("YouTube extraction succeeded with PO Token (no cookies)")
+                except (DownloadError, ExtractorError) as exc:
+                    last_exc = exc
+                    logger.warning("YouTube Strategy 2 (PO token without cookies) failed: %s", str(exc)[:200])
+                    info = None
+
+            # --- YouTube Strategy 3: Android client fallback (best-effort) ---
+            if info is None:
+                opts = {**self._base_opts(use_cookies=False, use_android_client=True), "skip_download": True}
+                try:
+                    with YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                    logger.info("YouTube extraction succeeded with android client fallback")
+                except (DownloadError, ExtractorError) as exc:
+                    err_to_map = exc or last_exc
+                    if isinstance(err_to_map, DownloadError):
+                        raise self._map_download_error(err_to_map) from err_to_map
+                    raise self._map_download_error(exc) from exc
 
         if not info or info.get("_type") not in (None, "video"):
             raise MediaUnavailableError("No downloadable video found at this URL.")
@@ -459,6 +494,11 @@ class MediaExtractor:
         info = self.get_info(url)
         title = info.get("title")
 
+        # YouTube direct media URLs (googlevideo.com) are strictly tied to yt-dlp session/IP context
+        # and expire quickly. Fetching them via separate HTTP clients (httpx) causes 403 Forbidden.
+        # Therefore, YouTube downloads MUST always be retrieved via yt-dlp's download_to_temp.
+        is_youtube = any(yt_host in url.lower() for yt_host in ("youtube.com", "youtu.be"))
+
         for raw in info.get("formats") or []:
             if str(raw.get("format_id")) != format_id:
                 continue
@@ -475,7 +515,9 @@ class MediaExtractor:
 
             needs_mux = has_video and not has_audio
             direct_url = raw.get("url")
-            if needs_mux or not direct_url:
+
+            # Route through yt-dlp download_to_temp if YouTube, mux needed, or direct_url missing
+            if is_youtube or needs_mux or not direct_url:
                 return ResolvedFormat(
                     format_id=format_id,
                     ext=ext,
@@ -512,36 +554,44 @@ class MediaExtractor:
             filesize=None,
         )
 
-    # -- mux fallback (temporary file, always deleted) ------------------------------
+    # -- mux / temp file download (temporary file, always deleted) ------------------
     def download_to_temp(self, url: str, format_id: str) -> str:
-        """Download + merge a video-only format to a temp file.
+        """Download + merge a video format to a temp file via yt-dlp.
 
-        Clearly-marked fallback path for formats that cannot be streamed
-        directly. The caller MUST delete the returned file when done.
-        Raises :class:`MuxingUnavailableError` when ffmpeg is absent.
+        Directs yt-dlp to retrieve media directly, avoiding 403 Forbidden errors
+        caused by external HTTP clients fetching googlevideo URLs.
+        The caller MUST delete the returned file when done.
         """
         if not _FORMAT_ID_RE.fullmatch(format_id):
             raise FormatNotAvailableError("The requested format id is invalid.")
-        if shutil.which("ffmpeg") is None:
-            raise MuxingUnavailableError()
+
+        has_ffmpeg = shutil.which("ffmpeg") is not None
 
         if format_id in ("140", "249", "250", "251") or "audio" in format_id.lower():
             format_spec = f"{format_id}/bestaudio/best"
             merge_fmt = "m4a"
         else:
-            format_spec = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
+            # First try merging format_id + bestaudio; if format_id already has audio or merging fails,
+            # fall back to format_id directly, then bestvideo+bestaudio, then best.
+            format_spec = f"{format_id}+bestaudio/{format_id}/bestvideo+bestaudio/best"
             merge_fmt = "mp4"
+
+        # If ffmpeg is absent and format requires muxing, check if fallback is possible
+        if not has_ffmpeg and "+" in format_spec:
+            # Without ffmpeg, try direct single stream if possible
+            format_spec = f"{format_id}/best"
 
         tmpdir = tempfile.mkdtemp(prefix="media_dl_")
         outtmpl = os.path.join(tmpdir, "media.%(ext)s")
 
-        # Strategy 1: cookies + PO Token (best quality)
+        is_youtube = any(yt_host in url.lower() for yt_host in ("youtube.com", "youtu.be"))
         download_success = False
         last_exc: Exception | None = None
 
-        if self._has_cookies():
+        if not is_youtube:
+            # Direct download for non-YouTube platforms (TikTok, Twitter/X, Instagram, etc.)
             opts = {
-                **self._base_opts(use_cookies=True),
+                **self._base_opts(use_cookies=False, use_android_client=False),
                 "format": format_spec,
                 "outtmpl": outtmpl,
                 "merge_output_format": merge_fmt,
@@ -552,44 +602,63 @@ class MediaExtractor:
                 download_success = True
             except (DownloadError, ExtractorError) as exc:
                 last_exc = exc
-                logger.warning("download attempt with cookies failed: %s", str(exc)[:200])
+                logger.warning("Download failed for %s: %s", safe_host(url), str(exc)[:200])
+        else:
+            # YouTube Strategy 1: cookies + PO Token (best quality)
+            if self._has_cookies():
+                opts = {
+                    **self._base_opts(use_cookies=True),
+                    "format": format_spec,
+                    "outtmpl": outtmpl,
+                    "merge_output_format": merge_fmt,
+                }
+                try:
+                    with YoutubeDL(opts) as ydl:
+                        ydl.download([url])
+                    download_success = True
+                except (DownloadError, ExtractorError) as exc:
+                    last_exc = exc
+                    logger.warning("YouTube download attempt with cookies failed: %s", str(exc)[:200])
 
-        # Strategy 2: PO Token without cookies (bot-check bypass from datacenter IPs)
-        if not download_success:
-            opts_pot = {
-                **self._base_opts(use_cookies=False, use_android_client=False),
-                "format": format_spec,
-                "outtmpl": outtmpl,
-                "merge_output_format": merge_fmt,
-            }
-            try:
-                with YoutubeDL(opts_pot) as ydl:
-                    ydl.download([url])
-                download_success = True
-            except (DownloadError, ExtractorError) as exc:
-                last_exc = exc
-                logger.warning("download attempt with PO token failed: %s", str(exc)[:200])
+            # YouTube Strategy 2: PO Token without cookies (bot-check bypass from datacenter IPs)
+            if not download_success:
+                opts_pot = {
+                    **self._base_opts(use_cookies=False, use_android_client=False),
+                    "format": format_spec,
+                    "outtmpl": outtmpl,
+                    "merge_output_format": merge_fmt,
+                }
+                try:
+                    with YoutubeDL(opts_pot) as ydl:
+                        ydl.download([url])
+                    download_success = True
+                except (DownloadError, ExtractorError) as exc:
+                    last_exc = exc
+                    logger.warning("YouTube download attempt with PO token failed: %s", str(exc)[:200])
 
-        # Strategy 3: Android client fallback
+            # YouTube Strategy 3: Android client fallback (best-effort)
+            if not download_success:
+                is_audio = format_id in ("140", "249", "250", "251") or "audio" in format_id.lower()
+                android_fmt = "bestaudio/best" if is_audio else f"{format_id}/best[ext=mp4]/best/18"
+                fallback_opts = {
+                    **self._base_opts(use_cookies=False, use_android_client=True),
+                    "format": android_fmt,
+                    "outtmpl": outtmpl,
+                    "merge_output_format": merge_fmt,
+                }
+                try:
+                    with YoutubeDL(fallback_opts) as ydl:
+                        ydl.download([url])
+                    download_success = True
+                except Exception as exc:
+                    last_exc = exc
+
         if not download_success:
-            is_audio = format_id in ("140", "249", "250", "251") or "audio" in format_id.lower()
-            android_fmt = "bestaudio/best" if is_audio else "best[ext=mp4]/best/18"
-            fallback_opts = {
-                **self._base_opts(use_cookies=False, use_android_client=True),
-                "format": android_fmt,
-                "outtmpl": outtmpl,
-                "merge_output_format": merge_fmt,
-            }
-            try:
-                with YoutubeDL(fallback_opts) as ydl:
-                    ydl.download([url])
-                download_success = True
-            except Exception as exc:
-                remove_temp_dir(tmpdir)
-                err_to_map = last_exc or exc
-                if isinstance(err_to_map, DownloadError):
-                    raise self._map_download_error(err_to_map) from err_to_map
-                raise MediaUnavailableError("This media could not be retrieved.") from exc
+            remove_temp_dir(tmpdir)
+            err_to_map = last_exc
+            if isinstance(err_to_map, DownloadError):
+                raise self._map_download_error(err_to_map) from err_to_map
+            raise MediaUnavailableError("This media could not be retrieved.") from err_to_map
 
         files = [
             os.path.join(tmpdir, name)
@@ -600,7 +669,7 @@ class MediaExtractor:
             remove_temp_dir(tmpdir)
             raise MediaUnavailableError("This media could not be retrieved.")
         logger.info(
-            "mux fallback produced temp file",
+            "temp file download produced",
             extra={"host": safe_host(url)},
         )
         return max(files, key=os.path.getsize)

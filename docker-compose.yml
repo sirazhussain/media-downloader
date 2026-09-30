@@ -20,6 +20,9 @@ services:
       - RATE_LIMIT_DOWNLOAD_PER_MIN=${RATE_LIMIT_DOWNLOAD_PER_MIN:-5}
       - REQUEST_TIMEOUT_SECONDS=${REQUEST_TIMEOUT_SECONDS:-30}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POT_PROVIDER_URL=${POT_PROVIDER_URL:-http://127.0.0.1:4416}
+      - PROXY_URL=${PROXY_URL:-}
+      - YOUTUBE_COOKIES=${YOUTUBE_COOKIES:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]

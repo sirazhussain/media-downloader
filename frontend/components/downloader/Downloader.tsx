@@ -78,39 +78,80 @@ export function Downloader({ initialUrl = "", autoAnalyze = false }: DownloaderP
     }
   }, [autoAnalyze, initialUrl, analyze]);
 
-  const handleDownload = React.useCallback(() => {
+  const selectedFormat = media?.formats.find(
+    (f) => f.format_id === selectedFormatId
+  );
+
+  const handleDownload = React.useCallback(async () => {
     if (!media || !selectedFormatId || !url) return;
     setError(null);
-    setDownloadPhase("downloading");
+    setDownloadPhase("preparing");
 
     try {
       const downloadUrl = getDirectDownloadUrl(url, selectedFormatId);
+      setDownloadPhase("downloading");
 
-      // Trigger browser native download manager instantly
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        let code = "DOWNLOAD_FAILED";
+        let message = `Server returned HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          if (body?.error?.message) {
+            message = body.error.message;
+            code = body.error.code ?? code;
+          } else if (body?.detail) {
+            message = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+          }
+        } catch {
+          // not JSON
+        }
+        throw new ApiError(code, message);
+      }
+
+      // Parse filename from Content-Disposition header if available
+      const disposition = response.headers.get("Content-Disposition");
+      let filename = `${media.title || "media"}.${selectedFormat?.ext || "mp4"}`;
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match?.[1]) {
+          filename = decodeURIComponent(utf8Match[1]);
+        } else {
+          const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+          if (asciiMatch?.[1]) {
+            filename = asciiMatch[1];
+          }
+        }
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
-      anchor.setAttribute("download", "");
+      anchor.href = objectUrl;
+      anchor.download = filename;
       anchor.style.display = "none";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
 
+      // Clean up object URL after a short delay
       window.setTimeout(() => {
-        setDownloadPhase("done");
-        window.setTimeout(() => setDownloadPhase("idle"), 5000);
-      }, 1500);
+        window.URL.revokeObjectURL(objectUrl);
+      }, 10000);
+
+      setDownloadPhase("done");
+      window.setTimeout(() => setDownloadPhase("idle"), 6000);
     } catch (err) {
       setDownloadPhase("idle");
       const apiError = err instanceof ApiError ? err : null;
       setError(
-        friendlyMessage(apiError?.code ?? "", apiError?.message ?? "")
+        friendlyMessage(
+          apiError?.code ?? "",
+          apiError?.message ?? (err instanceof Error ? err.message : "Download failed. Please try again.")
+        )
       );
     }
-  }, [media, selectedFormatId, url]);
-
-  const selectedFormat = media?.formats.find(
-    (f) => f.format_id === selectedFormatId
-  );
+  }, [media, selectedFormatId, selectedFormat, url]);
 
   return (
     <div className="flex w-full flex-col gap-8">

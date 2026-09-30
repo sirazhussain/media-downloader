@@ -39,7 +39,7 @@ def create_app() -> FastAPI:
     cors_kwargs = {
         "allow_methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["*"],
-        "expose_headers": ["Content-Disposition"],
+        "expose_headers": ["Content-Disposition", "Content-Length"],
         "allow_origin_regex": r"^https?://.*\.vercel\.app$",
     }
 

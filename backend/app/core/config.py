@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     rate_limit_download_per_min: int = 30
     request_timeout_seconds: int = 1800  # 30 min for large file streaming
     yt_dlp_socket_timeout: int = 30
+    pot_provider_url: str = "http://127.0.0.1:4416"
     youtube_cookies: str | None = None
     proxy_url: str | None = None
 
