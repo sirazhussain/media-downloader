@@ -1,9 +1,11 @@
 FROM python:3.12-slim
 
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+
 # ffmpeg is required for the (clearly-marked) mux fallback path that merges
 # video-only + audio streams into a single file for selected qualities.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates nodejs \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv/app
