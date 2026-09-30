@@ -29,9 +29,9 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="flex flex-col items-center gap-3 pb-8 text-center text-xs text-muted-foreground animate-fade-in" style={{ animationDelay: "300ms", opacity: 0 }}>
-        <p className="flex max-w-xl items-center justify-center gap-2 leading-relaxed">
+        <p className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 leading-relaxed px-4 max-w-md sm:max-w-xl">
           <ShieldCheck className="size-4 shrink-0 text-emerald-500" aria-hidden />
-          <span>
+          <span className="text-center">
             Only download media you own or are authorized to use. No files are stored permanently on our servers.
           </span>
         </p>
