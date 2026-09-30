@@ -139,7 +139,7 @@ class MediaExtractor:
             "retries": 2,
             "js_runtimes": {"node": {}},
             "remote_components": ["ejs:github"],
-            "extractor_args": {"youtube": {"player_client": ["web", "mweb", "android", "visionos"]}},
+            "extractor_args": {"youtube": {"player_client": ["android", "web", "mweb"]}},
         }
         cookiefile = None if MediaExtractor._cookies_blocked else self._get_cookiefile()
         if cookiefile:
@@ -268,7 +268,12 @@ class MediaExtractor:
         for raw in raw_list:
             format_id = str(raw.get("format_id") or "")
             ext = str(raw.get("ext") or "")
-            if not format_id or not ext or format_id.startswith("sb"):
+            if (
+                not format_id
+                or not ext
+                or format_id.startswith("sb")
+                or (format_id.startswith("6") and len(format_id) == 3)
+            ):
                 continue
 
             has_video = self._has_stream(raw.get("vcodec"))
@@ -481,25 +486,16 @@ class MediaExtractor:
             with YoutubeDL(opts) as ydl:
                 ydl.download([url])
         except (DownloadError, ExtractorError) as exc:
-            if "cookiefile" in opts and any(
-                m in str(exc).lower()
-                for m in ("sign in", "login", "auth", "confirm you're not a bot", "bot")
-            ):
-                fallback_opts = dict(opts)
-                fallback_opts.pop("cookiefile", None)
-                try:
-                    with YoutubeDL(fallback_opts) as ydl:
-                        ydl.download([url])
-                except Exception:
-                    remove_temp_dir(tmpdir)
-                    raise MediaUnavailableError(
-                        "This media could not be retrieved."
-                    ) from exc
-            else:
+            logger.warning("Initial download failed (%s), retrying with best stream fallback", exc)
+            fallback_opts = dict(opts)
+            fallback_opts.pop("cookiefile", None)
+            fallback_opts["format"] = "bestvideo+bestaudio/best"
+            try:
+                with YoutubeDL(fallback_opts) as ydl:
+                    ydl.download([url])
+            except Exception:
                 remove_temp_dir(tmpdir)
-                raise MediaUnavailableError(
-                    "This media could not be retrieved."
-                ) from exc
+                raise self._map_download_error(exc) from exc
 
         files = [
             os.path.join(tmpdir, name)
