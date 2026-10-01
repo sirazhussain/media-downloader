@@ -15,9 +15,17 @@ out/
 
 # Env & secrets
 .env
-.env.local
+.env.*
+!.env.example
 *.pem
 *.key
+*.p8
+*.p12
+*.pfx
+*.crt
+*.cer
+credentials.json
+service-account*.json
 
 # OS / editor
 .DS_Store
@@ -29,3 +37,6 @@ out/
 *.webm
 *.mp3
 tmp/
+
+# Generated TypeScript build metadata
+*.tsbuildinfo

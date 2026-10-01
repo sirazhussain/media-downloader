@@ -39,6 +39,6 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ro
 Write-Host "`n===================================================" -ForegroundColor Cyan
 Write-Host "Both services launched in separate windows!" -ForegroundColor Cyan
 Write-Host "- Backend API:  http://localhost:8000" -ForegroundColor White
-Write-Host "- Swagger Docs: http://localhost:8000/docs" -ForegroundColor White
+Write-Host "- Swagger Docs: http://localhost:8000/api/docs" -ForegroundColor White
 Write-Host "- Frontend UI:  http://localhost:3000" -ForegroundColor White
 Write-Host "===================================================" -ForegroundColor Cyan
