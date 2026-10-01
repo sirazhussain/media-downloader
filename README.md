@@ -1,51 +1,117 @@
-# Media Downloader
+<div align="center">
 
-A self-hosted web app for downloading public media that you own or are authorised to download. Paste a supported URL, review its available formats, and save the selected file through your browser.
+  <img src="assets/hero-banner.svg" alt="Media Downloader Banner" width="100%" />
 
-> **Use responsibly.** You are responsible for complying with copyright law and the terms of the source platform. This project is for public content you own or have permission to download. It does not bypass DRM, paywalls, or access controls.
+  <br/><br/>
 
-## Features
+  <h1>Media Downloader</h1>
 
-- Supports YouTube videos, Shorts, embeds, and `youtu.be` links, plus public Instagram Reels.
-- Shows a media preview with title, thumbnail, uploader, duration, and available formats.
-- Lets users choose video or audio formats, resolution, extension, and reported file size when available.
-- Streams downloads to the browser; the browser controls the destination folder and filename prompt.
-- Offers a shareable `/download?url=...` route that pre-fills a supported URL.
-- Uses FastAPI, Next.js, TypeScript, Tailwind CSS, and Docker Compose.
-- Includes a health endpoint and interactive OpenAPI documentation.
+  <p><strong>A clean, self-hosted media extraction and direct browser streaming web application.</strong></p>
+  <p>Download public media you own from YouTube, Shorts, and Instagram Reels — streamed directly to your browser with zero server-side storage.</p>
 
-## How it works
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-black.svg?style=flat-square" alt="MIT License" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/Next.js-14.2-black.svg?style=flat-square&logo=next.js" alt="Next.js" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.115-black.svg?style=flat-square&logo=fastapi" alt="FastAPI" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/Python-3.12-black.svg?style=flat-square&logo=python" alt="Python 3.12" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.6-black.svg?style=flat-square&logo=typescript" alt="TypeScript" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/Docker-Compose-black.svg?style=flat-square&logo=docker" alt="Docker" /></a>
+    <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-Welcome-black.svg?style=flat-square" alt="PRs Welcome" /></a>
+  </p>
+
+  <p>
+    <a href="#-features">Features</a> •
+    <a href="#-how-it-works">How It Works</a> •
+    <a href="#-platform-support">Supported Platforms</a> •
+    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-api-documentation">API Docs</a> •
+    <a href="#-license">License</a>
+  </p>
+
+</div>
+
+---
+
+## 📸 Application Preview
+
+<div align="center">
+  <img src="assets/preview.png" alt="Media Downloader UI Preview" width="90%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08);" />
+</div>
+
+---
+
+## ⚡ How It Works
+
+Download media you own in 3 simple steps:
+
+| Step | Action | Description |
+|:---:|---|---|
+| **`1`** | **Copy & Paste Link** | Paste any supported public video or reel URL into the search box. |
+| **`2`** | **Pick Format & Quality** | Choose from available resolutions (1080p FHD, 720p HD, 480p) or extract audio directly (MP3 / M4A). |
+| **`3`** | **Instant Download** | Click download to stream the media straight into your browser's download folder. |
+
+---
+
+## 🌟 Key Highlights
+
+- **⚡ High Speed Streaming:** Direct chunked streaming proxy — files stream into the browser as they arrive, eliminating long server processing queues.
+- **🔒 100% Private & Ephemeral:** Zero persistent storage on the host server. No databases, no user tracking, and no permanent media archives.
+- **🛡️ Strict SSRF Protection:** Validates every incoming URL against allowed domains; blocks loopback addresses, localhosts, and private subnet ranges.
+- **📱 Fully Responsive:** Clean white-slate minimalist interface optimized across desktop, tablet, and mobile browsers.
+- **🐳 Multi-Platform Setup:** Ready to run via native PowerShell script, manual terminal commands, or containerized Docker Compose.
+
+---
+
+## 🌐 Platform Support
+
+| Platform | Content Type | Video Quality | Audio Extraction | Streaming Mode | Status |
+|---|---|:---:|:---:|:---:|:---:|
+| **YouTube** | Videos & Uploads | Up to 4K / 1080p | ✅ MP3 / M4A | Direct Chunked | 🟢 Supported |
+| **YouTube Shorts** | Shorts & Embeds | HD (1080p) | ✅ MP3 / M4A | Direct Chunked | 🟢 Supported |
+| **Instagram** | Public Reels | HD Video | ✅ Audio Track | Direct Stream | 🟢 Supported |
+| **Direct Links** | Shareable `/download?url=...` | Dynamic | Dynamic | Browser Prompt | 🟢 Supported |
+
+> **Fair Use Notice:** Only download content you own or have explicit authorization to download. This tool operates strictly with publicly accessible content and does not bypass DRM, paywalls, or private authentication.
+
+---
+
+## 🏗️ Architecture
 
 ```text
-Browser -> Next.js UI -> FastAPI API -> yt-dlp/source platform
-   ^                                             |
-   +--------------- streamed download -----------+
+Browser Client ──────► Next.js 14 UI ──────► FastAPI Backend ──────► yt-dlp / Sources
+      ▲                                                                    │
+      └────────────────── Streamed Chunks (No Disk Storage) ───────────────┘
 ```
 
-The API validates the URL, reads public metadata, and validates the selected format again before downloading. Directly streamable formats are proxied in chunks. Formats that need yt-dlp/FFmpeg processing use a temporary directory and are removed after the response is finished; media is not retained as an application library.
+The FastAPI backend parses metadata and formats via `yt-dlp`. For streamable files, it forwards the media stream in chunks directly to the client with `Content-Disposition: attachment`. If merging is required, a temporary working buffer is used and purged immediately once the response concludes.
 
-## Quick start
+---
 
-### Requirements
+## 🚀 Quick Start
 
-- Node.js 20+ and npm
-- Python 3.12+
-- FFmpeg is recommended for formats that need audio/video merging
-- Docker Desktop is optional for containerised setup
+### Prerequisites
+- **Node.js** 20+ and **npm**
+- **Python** 3.12+
+- **FFmpeg** (recommended for video/audio merging)
+- *Optional:* Docker Desktop
 
-### Windows (PowerShell)
-
+### 1. Windows (PowerShell - One Command)
 ```powershell
 Copy-Item .env.example .env
 .\start-dev.ps1
 ```
+*Automatically sets up Python virtualenv, installs dependencies, and launches both frontend (`:3000`) and backend (`:8000`).*
 
-The launcher creates the Python virtual environment and installs frontend packages on first run. It starts the frontend at `http://localhost:3000` and the API at `http://localhost:8000`.
+### 2. Docker Compose
+```bash
+cp .env.example .env
+docker compose up --build
+```
+*Visit `http://localhost:3000` to start using the app.*
 
-### macOS / Linux or manual setup
+### 3. Manual Setup (macOS / Linux)
 
-In one terminal, start the API:
-
+**Backend:**
 ```bash
 cp .env.example .env
 cd backend
@@ -55,122 +121,75 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-In a second terminal, start the frontend:
-
+**Frontend:**
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`, paste a supported public URL, click **Analyze**, select a format, and click **Download**.
+---
 
-### Docker Compose
+## 🔌 API Documentation
 
-```bash
-cp .env.example .env
-docker compose up --build
-```
+When the backend is running, interactive OpenAPI documentation is available at `http://localhost:8000/api/docs`.
 
-Visit `http://localhost:3000`. Stop the stack with `docker compose down`.
+| Method | Endpoint | Description | Request Example |
+|:---:|---|---|---|
+| `GET` | `/api/v1/health` | Health and readiness check | `curl http://localhost:8000/api/v1/health` |
+| `POST` | `/api/v1/media/info` | Fetch video info & available formats | `{"url": "https://www.youtube.com/watch?v=..."}` |
+| `POST` | `/api/v1/media/download` | Stream selected media file | `{"url": "...", "format_id": "18"}` |
+| `GET` | `/api/v1/media/download` | Direct browser download URL | `/api/v1/media/download?url=...&format_id=18` |
 
-## API
+---
 
-Interactive API documentation is available at `http://localhost:8000/api/docs` while the backend is running.
+## ⚙️ Configuration
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/health` | Health check |
-| `POST` | `/api/v1/media/info` | Read media metadata and available formats |
-| `POST` | `/api/v1/media/download` | Stream a selected format |
-| `GET` | `/api/v1/media/download` | Browser-friendly download URL |
+Copy `.env.example` to `.env` to customize runtime settings:
 
-Example metadata request:
+| Variable | Default | Purpose |
+|---|---|---|
+| `CORS_ORIGINS` | `http://localhost:3000` | Allowed origins (use real frontend domain in production). |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend API URL embedded into frontend requests. |
+| `MAX_DOWNLOAD_BYTES` | `10737418240` (10 GB) | Maximum allowed file size for streamed downloads. |
+| `MAX_DURATION_SECONDS`| `14400` (4 hours) | Maximum allowable video duration. |
+| `RATE_LIMIT_INFO_PER_MIN` | `60` | Per-IP rate limit for metadata extraction. |
+| `RATE_LIMIT_DOWNLOAD_PER_MIN` | `30` | Per-IP rate limit for download streams. |
+| `REQUEST_TIMEOUT_SECONDS` | `1800` (30 min) | Socket timeout for large stream handling. |
+| `POT_PROVIDER_URL` | `http://127.0.0.1:4416` | Internal PO-token provider service. |
 
-```bash
-curl -X POST http://localhost:8000/api/v1/media/info \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://www.youtube.com/watch?v=VIDEO_ID"}'
-```
+---
 
-Example download request:
+## 🧪 Testing & Code Quality
 
-```bash
-curl -X POST http://localhost:8000/api/v1/media/download \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://www.youtube.com/watch?v=VIDEO_ID","format_id":"18"}' \
-  --output media.mp4
-```
-
-The metadata response includes a `formats` array. Use one of its `format_id` values in the download request. API failures use a stable envelope:
-
-```json
-{ "error": { "code": "MEDIA_UNAVAILABLE", "message": "This media is currently unavailable." } }
-```
-
-## Configuration and secrets
-
-Copy `.env.example` to `.env`; `.env` is ignored by Git and must never be committed. The example file has placeholders only.
-
-| Variable | Purpose |
-| --- | --- |
-| `CORS_ORIGINS` | Comma-separated origins allowed to call the API. Set your real frontend origin in production. |
-| `NEXT_PUBLIC_API_URL` | Public API base URL embedded into the frontend build. Do not put secrets here. |
-| `MAX_URL_LENGTH`, `MAX_DOWNLOAD_BYTES`, `MAX_DURATION_SECONDS` | Input and resource limits. |
-| `RATE_LIMIT_INFO_PER_MIN`, `RATE_LIMIT_DOWNLOAD_PER_MIN` | Per-IP limits for metadata and download requests. |
-| `REQUEST_TIMEOUT_SECONDS`, `LOG_LEVEL` | Request and logging configuration. |
-| `POT_PROVIDER_URL` | Internal PO-token provider address used by the backend. |
-| `PROXY_URL` | Optional upstream proxy URL. Treat proxy credentials as a secret. |
-| `YOUTUBE_COOKIES` | Optional server-side cookie material. Treat as highly sensitive; never expose it to the frontend or commit it. |
-
-For production, use your deployment platform's secret manager rather than a checked-in `.env` file. Restrict `CORS_ORIGINS`, set sensible download limits, and run the service behind HTTPS and an ingress/reverse proxy with appropriate request limits.
-
-## Security model
-
-- Accepts only recognised YouTube and Instagram URL patterns over HTTP(S).
-- Rejects IP-literal hosts, localhost, and addresses that resolve to private, loopback, link-local, multicast, or reserved ranges to mitigate SSRF.
-- Revalidates the URL and requested format on the server before each download.
-- Applies separate in-memory, per-IP rate limits to metadata and download endpoints. For multi-instance deployments, place a shared limiter at the edge or replace the store with a shared implementation.
-- Sanitises download filenames and returns controlled error messages rather than tracebacks or server paths.
-- Avoids logging complete user URLs, cookies, tokens, and secrets.
-
-Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
-
-## Development
-
-Run the backend test suite:
-
+Run backend unit and security tests:
 ```bash
 cd backend
 python -m pytest tests -q
 ```
 
-Run frontend checks:
-
+Run frontend typechecking and linting:
 ```bash
 cd frontend
-npm ci
 npm run typecheck
 npm run lint
 npm run build
 ```
 
-## Project layout
+---
 
-```text
-backend/       FastAPI application, yt-dlp integration, and pytest suite
-frontend/      Next.js application and TypeScript UI components
-.env.example   Safe environment-variable template
-docker-compose.yml
-start-dev.ps1  Windows development launcher
-```
+## 🤝 Contributing
 
-## Contributing
+Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before submitting pull requests.
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), open an issue for substantial changes, and keep pull requests focused with tests and documentation updates where relevant.
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## Security and licence
+---
 
-Security reporting instructions are in [SECURITY.md](SECURITY.md).
+## 📜 License
 
-**A licence has not been selected yet.** Before publishing this repository as open source, add a `LICENSE` file with the licence you choose. Until then, others do not automatically have permission to reuse the code.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for complete details.

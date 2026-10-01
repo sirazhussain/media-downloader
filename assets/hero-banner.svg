@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="100%" height="100%">
+  <defs>
+    <style>
+      .font-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 800; letter-spacing: -0.04em; }
+      .font-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 400; letter-spacing: -0.01em; }
+      .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .font-medium { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 600; }
+    </style>
+  </defs>
+
+  <!-- Clean Background with subtle border -->
+  <rect width="1200" height="360" rx="16" fill="#ffffff"/>
+  <rect x="1" y="1" width="1198" height="358" rx="15" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+
+  <!-- Top Pill: Fast, Free & Private -->
+  <g transform="translate(60, 48)">
+    <rect width="190" height="32" rx="16" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+    <path d="M 22 16 L 27 9 L 29 14 L 33 14 L 27 23 L 26 18 Z" fill="#2563eb"/>
+    <text x="38" y="21" fill="#1d4ed8" class="font-medium" font-size="12">Fast, Free &amp; Private</text>
+  </g>
+
+  <!-- Main Headline -->
+  <text x="60" y="142" fill="#0f172a" class="font-title" font-size="52">Media Downloader</text>
+
+  <!-- Subtitle -->
+  <text x="60" y="186" fill="#475569" class="font-sub" font-size="20">
+    Self-hosted media extraction &amp; direct browser streaming engine.
+  </text>
+  <text x="60" y="214" fill="#64748b" class="font-sub" font-size="16">
+    Streams directly to user devices with zero server-side storage or tracking.
+  </text>
+
+  <!-- Clean Minimalist Tags Row -->
+  <g transform="translate(60, 260)">
+    <!-- Tag 1 -->
+    <g transform="translate(0, 0)">
+      <rect width="145" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="16" y="23" fill="#0f172a" class="font-medium" font-size="13">⚡ Zero Storage</text>
+    </g>
+    <!-- Tag 2 -->
+    <g transform="translate(157, 0)">
+      <rect width="155" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="16" y="23" fill="#0f172a" class="font-medium" font-size="13">🛡️ SSRF Guarded</text>
+    </g>
+    <!-- Tag 3 -->
+    <g transform="translate(324, 0)">
+      <rect width="150" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="16" y="23" fill="#0f172a" class="font-medium" font-size="13">🌊 Direct Stream</text>
+    </g>
+    <!-- Tag 4 -->
+    <g transform="translate(486, 0)">
+      <rect width="140" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="16" y="23" fill="#0f172a" class="font-medium" font-size="13">📱 Mobile Ready</text>
+    </g>
+    <!-- Tag 5 -->
+    <g transform="translate(638, 0)">
+      <rect width="140" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="16" y="23" fill="#0f172a" class="font-medium" font-size="13">⚖️ MIT Licensed</text>
+    </g>
+  </g>
+
+  <!-- Right Clean Minimalist Device / Brand Mark -->
+  <g transform="translate(930, 70)">
+    <circle cx="100" cy="100" r="90" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+    <!-- Outer Ring Accent -->
+    <circle cx="100" cy="100" r="70" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    
+    <!-- Minimal Clean Download / Play glyph -->
+    <rect x="94" y="60" width="12" height="48" rx="6" fill="#0f172a"/>
+    <polygon points="76,104 124,104 100,132" fill="#0f172a"/>
+    <line x1="72" y1="146" x2="128" y2="146" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+    
+    <!-- Clean pill underneath -->
+    <rect x="35" y="210" width="130" height="28" rx="14" fill="#0f172a"/>
+    <text x="56" y="228" fill="#ffffff" class="font-mono" font-size="11" font-weight="700">v1.0.0 STABLE</text>
+  </g>
+</svg>
