@@ -178,18 +178,42 @@ npm run build
 
 ---
 
+## 🗺️ Roadmap & Ideas for Contributors
+
+Looking for a way to contribute? Here are features planned for upcoming releases:
+
+- [ ] **Dark Mode Support:** Theme toggle for night-time browsing.
+- [ ] **Playlist Downloads:** Batch fetch and download entire playlists.
+- [ ] **Progress & Speed Indicator:** Live download bandwidth & ETA display.
+- [ ] **More Extractors:** Expand supported platforms (TikTok, Twitter/X videos, Pinterest).
+- [ ] **Audio Formats:** Direct transcoding options for WAV, FLAC, and AAC.
+- [ ] **Browser Extension:** One-click download button directly on supported web pages.
+
+If you would like to work on any of these, feel free to open an issue or submit a pull request!
+
+---
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before submitting pull requests.
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. **Fork the Project**
+2. **Create your Feature Branch** (`git checkout -b feature/AmazingFeature`)
+3. **Commit your Changes** (`git commit -m 'feat: add AmazingFeature'`)
+4. **Push to the Branch** (`git push origin feature/AmazingFeature`)
+5. **Open a Pull Request**
+
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for contribution guidelines.
+
+---
+
+## ⭐ Show Your Support
+
+If this project helped you or saved you time, please give it a **Star on GitHub**! It helps more developers discover the repository.
 
 ---
 
 ## 📜 License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for complete details.
+
